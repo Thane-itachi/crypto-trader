@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { ChartPoint, ChartRange, MarketStatus, Quote } from '../types';
+import type { Candle, ChartPoint, ChartRange, MarketStatus, Quote } from '../types';
 import { fetchMarketSnapshot, fetchSeriesCached, POLL_INTERVAL } from '../lib/market';
 import { useNotifications } from './NotificationsContext';
 
@@ -13,7 +13,7 @@ interface MarketCtx {
   getQuote: (symbol: string) => Quote | undefined;
   priceOf: (symbol: string) => number;
   refresh: () => void;
-  series: (symbol: string, kind: 'crypto' | 'fiat', range: ChartRange) => Promise<{ points: ChartPoint[]; isDemo: boolean }>;
+  series: (symbol: string, kind: 'crypto' | 'fiat', range: ChartRange) => Promise<{ points: ChartPoint[]; candles: Candle[]; isDemo: boolean }>;
 }
 
 const Ctx = createContext<MarketCtx | null>(null);

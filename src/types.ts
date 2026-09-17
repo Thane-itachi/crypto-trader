@@ -29,6 +29,14 @@ export interface ChartPoint {
   p: number;
 }
 
+export interface Candle {
+  t: number; // epoch ms
+  o: number;
+  h: number;
+  l: number;
+  c: number;
+}
+
 export interface Holding {
   symbol: string;
   quantity: number;

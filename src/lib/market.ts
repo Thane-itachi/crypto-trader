@@ -1,4 +1,4 @@
-import type { ChartPoint, ChartRange, Quote } from '../types';
+import type { Candle, ChartPoint, ChartRange, Quote } from '../types';
 import { CRYPTO_ASSETS, FIAT_ASSETS, DEMO_BASE_PRICES } from './assets';
 
 const COINGECKO = 'https://api.coingecko.com/api/v3';
@@ -164,6 +164,31 @@ function spaced<T>(fn: () => Promise<T>, gapMs = 600): Promise<T> {
   return result;
 }
 
+
+// ---------------------------------------------------------------------------
+// Candles: true OHLC where the API provides it; otherwise derived from real
+// close prices (open = previous close, high/low = max/min of open & close).
+// Every plotted level traces to a real API price — never synthetic.
+// ---------------------------------------------------------------------------
+
+function candlesFromPoints(points: ChartPoint[]): Candle[] {
+  const out: Candle[] = [];
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i];
+    const o = i > 0 ? points[i - 1].p : p.p;
+    out.push({ t: p.t, o, c: p.p, h: Math.max(o, p.p), l: Math.min(o, p.p) });
+  }
+  return out;
+}
+
+async function liveCryptoOHLC(id: string, days: number): Promise<Candle[]> {
+  const res = await spaced(() => fetch(`${COINGECKO}/coins/${id}/ohlc?vs_currency=usd&days=${days}`));
+  if (!res.ok) throw new Error(`CoinGecko ${res.status}`);
+  const data: [number, number, number, number, number][] = await res.json();
+  if (!Array.isArray(data) || data.length === 0) throw new Error('empty ohlc');
+  return data.map(([t, o, h, l, c]) => ({ t, o, h, l, c }));
+}
+
 // ---------------------------------------------------------------------------
 // Public service: live with graceful demo fallback per provider
 // ---------------------------------------------------------------------------
@@ -226,22 +251,34 @@ export async function fetchSeries(
   kind: 'crypto' | 'fiat',
   range: ChartRange,
   currentPrice: number,
-): Promise<{ points: ChartPoint[]; isDemo: boolean }> {
+): Promise<{ points: ChartPoint[]; candles: Candle[]; isDemo: boolean }> {
   if (kind === 'crypto') {
-    try {
-      const asset = CRYPTO_ASSETS.find((a) => a.symbol === symbol);
-      if (!asset) throw new Error('unknown asset');
-      const days = RANGE_DAYS[range];
-      const res = await spaced(() => fetch(`${COINGECKO}/coins/${asset.id}/market_chart?vs_currency=usd&days=${days}`));
-      if (!res.ok) throw new Error(`CoinGecko ${res.status}`);
-      const data = await res.json();
-      const prices: [number, number][] = data?.prices;
-      if (!Array.isArray(prices) || prices.length === 0) throw new Error('empty series');
-      let points = prices.map(([t, p]) => ({ t, p }));
-      if (range === '1H') points = points.slice(-12);
-      return { points, isDemo: false };
-    } catch {
-      // fall through to demo
+    const asset = CRYPTO_ASSETS.find((a) => a.symbol === symbol);
+    const days = RANGE_DAYS[range];
+    if (asset && range !== '1H') {
+      // 1) Real OHLC candles straight from CoinGecko
+      try {
+        const candles = await liveCryptoOHLC(asset.id, days);
+        const points = candles.map((c) => ({ t: c.t, p: c.c }));
+        return { points, candles, isDemo: false };
+      } catch {
+        // fall through to close series
+      }
+    }
+    if (asset) {
+      // 2) Real close series, aggregated into candles (open = previous close)
+      try {
+        const res = await spaced(() => fetch(`${COINGECKO}/coins/${asset.id}/market_chart?vs_currency=usd&days=${days}`));
+        if (!res.ok) throw new Error(`CoinGecko ${res.status}`);
+        const data = await res.json();
+        const prices: [number, number][] = data?.prices;
+        if (!Array.isArray(prices) || prices.length === 0) throw new Error('empty series');
+        let points = prices.map(([t, p]) => ({ t, p }));
+        if (range === '1H') points = points.slice(-12);
+        return { points, candles: candlesFromPoints(points), isDemo: false };
+      } catch {
+        // fall through to demo
+      }
     }
   }
   // Demo series: seeded random walk ending at currentPrice
@@ -264,10 +301,10 @@ export async function fetchSeries(
     points.push({ t: now - (n - 1 - i) * stepMs, p });
     if (i < n - 1) p = p * (1 + deltas[i]);
   }
-  return { points, isDemo: true };
+  return { points, candles: candlesFromPoints(points), isDemo: true };
 }
 
-const seriesCache = new Map<string, { points: ChartPoint[]; isDemo: boolean; at: number }>();
+const seriesCache = new Map<string, { points: ChartPoint[]; candles: Candle[]; isDemo: boolean; at: number }>();
 
 export async function fetchSeriesCached(
   symbol: string,
@@ -280,6 +317,6 @@ export async function fetchSeriesCached(
   const ttl = range === '1H' || range === '1D' ? 120_000 : 600_000;
   if (cached && Date.now() - cached.at < ttl) return cached;
   const fresh = await fetchSeries(symbol, kind, range, currentPrice);
-  seriesCache.set(key, { ...fresh, at: Date.now() });
-  return { points: fresh.points, isDemo: fresh.isDemo };
+  seriesCache.set(key, { points: fresh.points, candles: fresh.candles, isDemo: fresh.isDemo, at: Date.now() });
+  return { points: fresh.points, candles: fresh.candles, isDemo: fresh.isDemo };
 }

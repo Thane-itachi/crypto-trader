@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import CandleChart from './CandleChart';
 import { Loader2 } from 'lucide-react';
 import { useMarket } from '../../context/MarketContext';
-import type { ChartPoint, ChartRange } from '../../types';
+import type { Candle, ChartPoint, ChartRange } from '../../types';
 import { Badge } from '../ui';
 
 const RANGES: ChartRange[] = ['1H', '1D', '1W', '1M', '3M', '1Y'];
@@ -17,7 +18,9 @@ interface Props {
 export default function PriceChart({ symbol, kind, height = 320, showRanges = true }: Props) {
   const { series, getQuote } = useMarket();
   const [range, setRange] = useState<ChartRange>('1D');
+  const [mode, setMode] = useState<'candle' | 'line'>('candle');
   const [points, setPoints] = useState<ChartPoint[] | null>(null);
+  const [candles, setCandles] = useState<Candle[] | null>(null);
   const [isDemo, setIsDemo] = useState(false);
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -31,6 +34,7 @@ export default function PriceChart({ symbol, kind, height = 320, showRanges = tr
       .then((res) => {
         if (runId.current !== id) return;
         setPoints(res.points);
+        setCandles(res.candles ?? null);
         setIsDemo(res.isDemo);
         setLoading(false);
       })
@@ -76,6 +80,19 @@ export default function PriceChart({ symbol, kind, height = 320, showRanges = tr
             ))}
           </div>
         )}
+        <div className="flex gap-1" title="Chart type">
+          {(['candle', 'line'] as const).map((m) => (
+            <button
+              key={m}
+              onClick={() => setMode(m)}
+              className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
+                mode === m ? 'bg-primary-600 text-white' : 'text-muted hover:bg-panel hover:text-txt'
+              }`}
+            >
+              {m === 'candle' ? 'Candles' : 'Line'}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="relative" style={{ height }}>
@@ -92,7 +109,10 @@ export default function PriceChart({ symbol, kind, height = 320, showRanges = tr
             </button>
           </div>
         )}
-        {!loading && !error && points && (
+        {!loading && !error && mode === 'candle' && candles && candles.length > 0 && (
+          <CandleChart candles={candles} height={height - 24} range={range} />
+        )}
+        {!loading && !error && points && (mode === 'line' || !candles || candles.length === 0) && (
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={points} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
               <defs>
