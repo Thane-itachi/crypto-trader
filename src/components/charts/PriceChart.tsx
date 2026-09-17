@@ -4,9 +4,29 @@ import CandleChart from './CandleChart';
 import { Loader2 } from 'lucide-react';
 import { useMarket } from '../../context/MarketContext';
 import type { Candle, ChartPoint, ChartRange } from '../../types';
+import { useCandleStream } from '../../hooks/useCandleStream';
+import type { KlineTick } from '../../lib/binanceStream';
 import { Badge } from '../ui';
 
 const RANGES: ChartRange[] = ['5m', '15m', '1H', '1D', '1W', '1M', '3M', '1Y'];
+
+// Which Binance kline interval matches each range's candle size.
+const STREAM_INTERVALS: Partial<Record<ChartRange, string>> = {
+  '5m': '5m',
+  '15m': '15m',
+  '1H': '1h',
+  '1D': '30m',
+  '1W': '4h',
+};
+
+function fmtCountdown(ms: number): string {
+  const s = Math.ceil(ms / 1000);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const ss = s % 60;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return h > 0 ? `${h}:${pad(m)}:${pad(ss)}` : `${pad(m)}:${pad(ss)}`;
+}
 
 interface Props {
   symbol: string;
@@ -24,12 +44,16 @@ export default function PriceChart({ symbol, kind, height = 320, showRanges = tr
   const [isDemo, setIsDemo] = useState(false);
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [countdown, setCountdown] = useState<number | null>(null);
   const runId = useRef(0);
+  const candlesRef = useRef<Candle[] | null>(null);
+  const closeAtRef = useRef(0);
 
   useEffect(() => {
     const id = ++runId.current;
     setLoading(true);
     setError(false);
+    closeAtRef.current = 0;
     series(symbol, kind, range)
       .then((res) => {
         if (runId.current !== id) return;
@@ -45,10 +69,48 @@ export default function PriceChart({ symbol, kind, height = 320, showRanges = tr
       });
   }, [symbol, kind, range, series]);
 
-  const positive = points && points.length > 1 ? points[points.length - 1].p >= points[0].p : true;
+  candlesRef.current = candles;
+
+  const streamInterval = kind === 'crypto' && showRanges ? STREAM_INTERVALS[range] : undefined;
+  const streamOn = mode === 'candle' && streamInterval !== undefined;
+
+  // Merge a live kline tick into the candle set: reshape the active candle,
+  // or append the freshly opened one when the interval rolls over.
+  const handleTick = (k: KlineTick) => {
+    closeAtRef.current = k.closeTime;
+    const base = candlesRef.current;
+    if (!base || base.length === 0) return;
+    const last = base[base.length - 1];
+    let next: Candle[];
+    if (k.t === last.t) {
+      next = base
+        .slice(0, -1)
+        .concat({ ...last, h: Math.max(last.h, k.h), l: Math.min(last.l, k.l), c: k.c });
+    } else if (k.t > last.t) {
+      next = base.concat({ t: k.t, o: k.o, h: k.h, l: k.l, c: k.c }).slice(-400);
+    } else {
+      return; // tick older than our newest candle — ignore
+    }
+    candlesRef.current = next;
+    setCandles(next);
+  };
+
+  const connected = useCandleStream(streamOn ? symbol : null, streamOn ? streamInterval ?? null : null, handleTick);
+
+  // Countdown ticks once per second toward the active candle's close time.
+  useEffect(() => {
+    if (!streamOn) return;
+    const upd = () => setCountdown(closeAtRef.current > 0 ? Math.max(0, closeAtRef.current - Date.now()) : null);
+    upd();
+    const timer = setInterval(upd, 1000);
+    return () => clearInterval(timer);
+  }, [streamOn, symbol, range]);
+
+  const changeSrc = candles && candles.length > 1 ? candles.map((c) => ({ p: c.c })) : points;
+  const positive = changeSrc && changeSrc.length > 1 ? changeSrc[changeSrc.length - 1].p >= changeSrc[0].p : true;
   const color = positive ? 'rgb(52 211 153)' : 'rgb(251 113 133)';
 
-  const change = points && points.length > 1 ? ((points[points.length - 1].p - points[0].p) / points[0].p) * 100 : null;
+  const change = changeSrc && changeSrc.length > 1 ? ((changeSrc[changeSrc.length - 1].p - changeSrc[0].p) / changeSrc[0].p) * 100 : null;
 
   return (
     <div>
@@ -63,6 +125,17 @@ export default function PriceChart({ symbol, kind, height = 320, showRanges = tr
           )}
           {isDemo && (
             <Badge tone="accent">DEMO CHART DATA</Badge>
+          )}
+          {streamOn && (
+            <span
+              className={`flex items-center gap-1.5 rounded-full px-2 py-0.5 font-mono text-[10px] font-semibold ${
+                connected ? 'bg-emerald-500/10 text-emerald-500' : 'bg-panel text-muted'
+              }`}
+              title={connected ? 'Binance live stream — time until the current candle closes' : 'Live stream unavailable — using market refresh'}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${connected ? 'animate-pulse bg-emerald-500' : 'bg-muted-foreground/40'}`} />
+              {connected ? (countdown !== null ? `${fmtCountdown(countdown)} to close` : 'connecting…') : 'stream off'}
+            </span>
           )}
         </div>
         {showRanges && (
@@ -159,7 +232,11 @@ export default function PriceChart({ symbol, kind, height = 320, showRanges = tr
         )}
       </div>
       <p className="mt-1 text-[10px] text-muted">
-        {isDemo ? 'Simulated chart data — not real market history.' : `Live market history · updates every ${getQuote(symbol)?.kind === 'fiat' ? 'refresh' : 'refresh'}`}
+        {isDemo
+  ? 'Simulated chart data — not real market history.'
+  : streamOn && connected
+    ? 'Live Binance stream · active candle updates tick-by-tick'
+    : 'Live market history · updates every refresh'}
       </p>
     </div>
   );
