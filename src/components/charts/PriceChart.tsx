@@ -183,7 +183,7 @@ export default function PriceChart({ symbol, kind, height = 320, showRanges = tr
           </div>
         )}
         {!loading && !error && mode === 'candle' && candles && candles.length > 0 && (
-          <CandleChart candles={candles} height={height - 24} range={range} />
+          <CandleChart key={symbol} candles={candles} height={height - 24} range={range} />
         )}
         {!loading && !error && points && (mode === 'line' || !candles || candles.length === 0) && (
           <ResponsiveContainer width="100%" height="100%">
