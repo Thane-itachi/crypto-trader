@@ -84,7 +84,7 @@ async function liveCryptoQuotes(): Promise<Quote[]> {
   const res = await fetch(
     `${COINGECKO}/coins/markets?vs_currency=usd&ids=${ids}&sparkline=false&price_change_percentage=24h`,
   );
-  if (!res.ok) throw new Error(`CoinGecko ${res.status}`);
+  if (!res.ok) throw Object.assign(new Error(`CoinGecko ${res.status}`), { status: res.status });
   const data: CGMarket[] = await res.json();
   if (!Array.isArray(data) || data.length === 0) throw new Error('empty response');
   const byId = new Map(data.map((d) => [d.id, d]));
@@ -108,7 +108,7 @@ async function liveCryptoQuotes(): Promise<Quote[]> {
 
 async function liveFiatQuotes(): Promise<Quote[]> {
   const res = await fetch(FX_API);
-  if (!res.ok) throw new Error(`FX ${res.status}`);
+  if (!res.ok) throw Object.assign(new Error(`FX ${res.status}`), { status: res.status });
   const data = await res.json();
   const rates: Record<string, number> = data?.rates;
   if (!rates || !rates.EUR) throw new Error('bad FX payload');
@@ -128,6 +128,43 @@ async function liveFiatQuotes(): Promise<Quote[]> {
 }
 
 // ---------------------------------------------------------------------------
+// Rate-limit protection: escalating backoff per provider + single-flight
+// ---------------------------------------------------------------------------
+// After a failure (HTTP 429, 5xx, network), live calls for that provider are
+// paused for 60s, doubling on consecutive failures (max 15 min). A success
+// resets the penalty. During backoff the demo fallback serves immediately,
+// so a rate-limited API is never hammered in a retry loop.
+
+const backoff: Record<'crypto' | 'fx', number> = { crypto: 0, fx: 0 };
+const backoffMisses: Record<'crypto' | 'fx', number> = { crypto: 0, fx: 0 };
+const BACKOFF_BASE_MS = 60_000;
+const BACKOFF_MAX_MS = 15 * 60_000;
+
+function livePaused(p: 'crypto' | 'fx'): boolean {
+  return Date.now() < backoff[p];
+}
+function noteFailure(p: 'crypto' | 'fx') {
+  backoffMisses[p] += 1;
+  backoff[p] = Date.now() + Math.min(BACKOFF_BASE_MS * backoffMisses[p], BACKOFF_MAX_MS);
+}
+function noteSuccess(p: 'crypto' | 'fx') {
+  backoffMisses[p] = 0;
+  backoff[p] = 0;
+}
+
+// Spacer: ensure a minimum gap between outbound CoinGecko chart requests so
+// loading many charts (e.g. watchlist sparklines) cannot burst into a 429.
+let requestChain: Promise<void> = Promise.resolve();
+function spaced<T>(fn: () => Promise<T>, gapMs = 600): Promise<T> {
+  const result = requestChain.then(() => fn());
+  requestChain = result.then(
+    () => new Promise((r) => setTimeout(r, gapMs)),
+    () => new Promise((r) => setTimeout(r, gapMs)),
+  );
+  return result;
+}
+
+// ---------------------------------------------------------------------------
 // Public service: live with graceful demo fallback per provider
 // ---------------------------------------------------------------------------
 
@@ -137,18 +174,33 @@ export interface MarketSnapshot {
   fiatLive: boolean;
 }
 
-export async function fetchMarketSnapshot(tick: number): Promise<MarketSnapshot> {
-  const [crypto, fiat] = await Promise.allSettled([liveCryptoQuotes(), liveFiatQuotes()]);
-  const cryptoLive = crypto.status === 'fulfilled';
-  const fiatLive = fiat.status === 'fulfilled';
-  return {
-    quotes: [
-      ...(cryptoLive ? crypto.value : demoCryptoQuotes(tick)),
-      ...(fiatLive ? fiat.value : demoFiatQuotes(tick)),
-    ],
-    cryptoLive,
-    fiatLive,
-  };
+let snapshotInFlight: Promise<MarketSnapshot> | null = null;
+
+export function fetchMarketSnapshot(tick: number): Promise<MarketSnapshot> {
+  if (snapshotInFlight) return snapshotInFlight; // single-flight: concurrent callers share one request
+  snapshotInFlight = (async () => {
+    const [crypto, fiat] = await Promise.allSettled([
+      livePaused('crypto') ? Promise.reject(new Error('rate-limit backoff')) : liveCryptoQuotes(),
+      livePaused('fx') ? Promise.reject(new Error('rate-limit backoff')) : liveFiatQuotes(),
+    ]);
+    if (crypto.status === 'fulfilled') noteSuccess('crypto');
+    else noteFailure('crypto');
+    if (fiat.status === 'fulfilled') noteSuccess('fx');
+    else noteFailure('fx');
+    const cryptoLive = crypto.status === 'fulfilled';
+    const fiatLive = fiat.status === 'fulfilled';
+    return {
+      quotes: [
+        ...(cryptoLive ? crypto.value : demoCryptoQuotes(tick)),
+        ...(fiatLive ? fiat.value : demoFiatQuotes(tick)),
+      ],
+      cryptoLive,
+      fiatLive,
+    };
+  })().finally(() => {
+    snapshotInFlight = null;
+  });
+  return snapshotInFlight;
 }
 
 const RANGE_DAYS: Record<ChartRange, number> = {
@@ -180,7 +232,7 @@ export async function fetchSeries(
       const asset = CRYPTO_ASSETS.find((a) => a.symbol === symbol);
       if (!asset) throw new Error('unknown asset');
       const days = RANGE_DAYS[range];
-      const res = await fetch(`${COINGECKO}/coins/${asset.id}/market_chart?vs_currency=usd&days=${days}`);
+      const res = await spaced(() => fetch(`${COINGECKO}/coins/${asset.id}/market_chart?vs_currency=usd&days=${days}`));
       if (!res.ok) throw new Error(`CoinGecko ${res.status}`);
       const data = await res.json();
       const prices: [number, number][] = data?.prices;
