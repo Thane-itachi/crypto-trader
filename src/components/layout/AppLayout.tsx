@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
-  Activity, Bell, CandlestickChart, CircleDollarSign, Compass, Gauge,
+  Activity, Bell, CandlestickChart, CircleDollarSign, Compass, Download, Gauge,
   LayoutDashboard, LogOut, Menu, Moon, PieChart, Search, Settings as SettingsIcon,
   Sun, User as UserIcon, Wallet, X,
 } from 'lucide-react';
@@ -10,6 +10,7 @@ import { useMarket } from '../../context/MarketContext';
 import { useNotifications } from '../../context/NotificationsContext';
 import { Badge } from '../ui';
 import SearchDialog from './SearchDialog';
+import { usePwaInstall } from '../../hooks/usePwaInstall';
 import NotificationCenter from '../NotificationCenter';
 import Toaster from '../Toaster';
 import { useState } from 'react';
@@ -47,6 +48,48 @@ function LivePill() {
     <Badge tone="down" className="font-mono">
       ● MARKET DATA UNAVAILABLE
     </Badge>
+  );
+}
+
+/** Install-app button — appears once the browser offers installation
+ * (beforeinstallprompt) or always on iOS with Add-to-Home-Screen guidance. */
+function InstallButton() {
+  const { canInstall, install, installed, isIos } = usePwaInstall();
+  const [hint, setHint] = useState(false);
+  if (installed) return null;
+  if (!canInstall && !isIos) return null;
+
+  const handle = async () => {
+    if (canInstall) await install();
+    else setHint((h) => !h);
+  };
+
+  return (
+    <div className="relative">
+      <button
+        onClick={handle}
+        className="rounded-lg p-2 text-muted hover:bg-panel hover:text-txt"
+        aria-label="Install app"
+        title="Install Crypto-Trader on this device"
+      >
+        <Download size={17} />
+      </button>
+      {hint && (
+        <div className="absolute right-0 top-11 z-30 w-60 rounded-lg border border-line bg-surface p-3 text-xs shadow-xl">
+          <p className="font-semibold text-txt">Install on iPhone / iPad</p>
+          <p className="mt-1 text-muted">
+            Tap the <span className="font-semibold text-txt">Share</span> button in Safari, then{' '}
+            <span className="font-semibold text-txt">Add to Home Screen</span>.
+          </p>
+          <button
+            onClick={() => setHint(false)}
+            className="mt-2 rounded-md bg-primary-600 px-2.5 py-1 text-[11px] font-semibold text-white"
+          >
+            Got it
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -172,6 +215,7 @@ export default function AppLayout() {
           <div className="ml-auto flex items-center gap-2">
             <LivePill />
             <NotificationCenter />
+            <InstallButton />
             <button onClick={toggleTheme} className="rounded-lg p-2 text-muted hover:bg-panel" aria-label="Toggle theme">
               {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
             </button>

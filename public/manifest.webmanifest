@@ -1,0 +1,16 @@
+{
+  "name": "Crypto-Trader — Paper Trading",
+  "short_name": "Crypto-Trader",
+  "description": "Monitor crypto and currency markets and practice trading with virtual funds.",
+  "id": "/app",
+  "start_url": "/app",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#080b0f",
+  "theme_color": "#080b0f",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
