@@ -16,7 +16,7 @@ interface Props {
 
 function fmtTick(t: number, range: ChartRange): string {
   const d = new Date(t);
-  return range === '1H' || range === '1D'
+  return range === '5m' || range === '15m' || range === '1H' || range === '1D'
     ? d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
     : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
