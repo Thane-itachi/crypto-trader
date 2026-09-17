@@ -1,5 +1,6 @@
 import type { Candle, ChartPoint, ChartRange, Quote } from '../types';
 import { CRYPTO_ASSETS, FIAT_ASSETS, DEMO_BASE_PRICES } from './assets';
+import { binancePair, fetchKlines } from './binanceStream';
 
 const COINGECKO = 'https://api.coingecko.com/api/v3';
 const FX_API = 'https://open.er-api.com/v6/latest/USD';
@@ -197,10 +198,13 @@ function bucketCandles(points: ChartPoint[], intervalMs: number, windowHours: nu
 
 function candlesFromPoints(points: ChartPoint[]): Candle[] {
   const out: Candle[] = [];
+  const volSeed = mulberry32(points[0]?.t ?? Date.now());
   for (let i = 0; i < points.length; i++) {
     const p = points[i];
     const o = i > 0 ? points[i - 1].p : p.p;
-    out.push({ t: p.t, o, c: p.p, h: Math.max(o, p.p), l: Math.min(o, p.p) });
+    // Synthetic volume (demo only): activity scales with the candle's range.
+    const v = 800 * (0.4 + volSeed()) * (1 + Math.abs(p.p - o) / (p.p || 1) * 200);
+    out.push({ t: p.t, o, c: p.p, h: Math.max(o, p.p), l: Math.min(o, p.p), v });
   }
   return out;
 }
@@ -288,6 +292,20 @@ export async function fetchSeries(
       // 15m/1H get true OHLC; 5m is derived (open = previous close) since each
       // bucket holds one price.
       if (range === '5m' || range === '15m' || range === '1H') {
+        // True OHLCV from Binance REST first — real wicks (high/low) and
+        // traded volume. Falls back to the CoinGecko close series (flat
+        // wicks, no volume) when Binance is unreachable.
+        const pair = binancePair(symbol);
+        if (pair) {
+          const interval = range === '5m' ? '5m' : range === '15m' ? '15m' : '1h';
+          const limit = range === '5m' ? 288 : range === '15m' ? 96 : 168;
+          const klines = await fetchKlines(pair, interval, limit);
+          if (klines && klines.length >= 2) {
+            const candles: Candle[] = klines.map((k) => ({ t: k.t, o: k.o, h: k.h, l: k.l, c: k.c, v: k.v }));
+            const points = candles.map((c) => ({ t: c.t, p: c.c }));
+            return { points, candles, isDemo: false };
+          }
+        }
         try {
           // Deep history so pan/zoom-out can reach older data:
           // 5m = full 24h of 5-min closes (288 candles),

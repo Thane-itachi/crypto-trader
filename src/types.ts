@@ -35,6 +35,7 @@ export interface Candle {
   h: number;
   l: number;
   c: number;
+  v?: number; // traded volume (present when the source provides it)
 }
 
 export interface Holding {

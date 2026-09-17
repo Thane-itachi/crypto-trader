@@ -25,6 +25,10 @@ function fmtTick(t: number, range: ChartRange): string {
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
 
+// Compact volume for the tooltip (1.2K, 3.4M, 890B ...)
+const fmtVol = (v: number) =>
+  new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(v);
+
 /**
  * Hand-rolled SVG candlestick chart: true OHLC candles, crosshair + tooltip,
  * responsive via ResizeObserver. Zoomable + pannable — mouse wheel or pinch
@@ -70,12 +74,16 @@ export default function CandleChart({ candles, height, range }: Props) {
     lo -= pad;
     hi += pad;
     const plotW = width - PAD.left - PAD.right;
-    const plotH = height - PAD.top - PAD.bottom;
+    const fullH = height - PAD.top - PAD.bottom;
+    const hasVol = view.some((c) => typeof c.v === 'number' && c.v > 0);
+    const volH = hasVol ? fullH * 0.16 : 0;
+    const plotH = fullH - (hasVol ? volH + 6 : 0);
+    const maxV = hasVol ? Math.max(...view.map((c) => c.v ?? 0)) : 0;
     const slot = plotW / view.length;
     const bodyW = Math.max(1.2, Math.min(slot * 0.55, 14)); // compact candles, thinner when dense
     const y = (v: number) => PAD.top + (1 - (v - lo) / (hi - lo)) * plotH;
     const x = (i: number) => PAD.left + slot * i + slot / 2;
-    return { lo, hi, plotW, plotH, slot, bodyW, y, x };
+    return { lo, hi, plotW, plotH, fullH, hasVol, volH, maxV, slot, bodyW, y, x };
   }, [view, width, height]);
 
   // Mirror of the current viewport for native (non-React) event handlers.
@@ -283,6 +291,25 @@ export default function CandleChart({ candles, height, range }: Props) {
             </g>
           );
         })}
+
+        {/* volume histogram — trading activity strength per candle */}
+        {geo.hasVol &&
+          view.map((c, i) => {
+            if (!c.v) return null;
+            const up = c.c >= c.o;
+            const barH = (c.v / (geo.maxV || 1)) * geo.volH;
+            return (
+              <rect
+                key={`v-${c.t}-${i}`}
+                x={geo.x(i) - geo.bodyW / 2}
+                y={PAD.top + geo.fullH - barH}
+                width={geo.bodyW}
+                height={Math.max(0.5, barH)}
+                fill={up ? UP : DOWN}
+                opacity={0.3}
+              />
+            );
+          })}
       </svg>
 
       {/* zoom controls */}
@@ -328,6 +355,11 @@ export default function CandleChart({ candles, height, range }: Props) {
             <span className="text-muted">L <span className="text-down">{fmtPrice(hovered.l)}</span></span>
             <span className="text-muted">C <span className="text-txt">{fmtPrice(hovered.c)}</span></span>
           </div>
+          {typeof hovered.v === 'number' && (
+            <p className="text-muted">
+              Vol <span className="text-txt">{fmtVol(hovered.v)}</span>
+            </p>
+          )}
           <p className={`mt-1 font-mono font-bold ${hovered.c >= hovered.o ? 'text-up' : 'text-down'}`}>
             {hovered.c >= hovered.o ? '+' : ''}
             {(((hovered.c - hovered.o) / hovered.o) * 100).toFixed(2)}%
