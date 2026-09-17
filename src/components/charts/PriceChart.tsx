@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import CandleChart from './CandleChart';
+import KagiChart from './KagiChart';
 import { Loader2 } from 'lucide-react';
 import { useMarket } from '../../context/MarketContext';
 import type { Candle, ChartPoint, ChartRange } from '../../types';
@@ -38,7 +39,8 @@ interface Props {
 export default function PriceChart({ symbol, kind, height = 320, showRanges = true }: Props) {
   const { series, getQuote } = useMarket();
   const [range, setRange] = useState<ChartRange>('1D');
-  const [mode, setMode] = useState<'candle' | 'line'>('candle');
+  const [mode, setMode] = useState<'candle' | 'line' | 'kagi'>('candle');
+  const [kagiRev, setKagiRev] = useState(1); // Kagi reversal threshold (%)
   const [points, setPoints] = useState<ChartPoint[] | null>(null);
   const [candles, setCandles] = useState<Candle[] | null>(null);
   const [isDemo, setIsDemo] = useState(false);
@@ -72,7 +74,7 @@ export default function PriceChart({ symbol, kind, height = 320, showRanges = tr
   candlesRef.current = candles;
 
   const streamInterval = kind === 'crypto' && showRanges ? STREAM_INTERVALS[range] : undefined;
-  const streamOn = mode === 'candle' && streamInterval !== undefined;
+  const streamOn = (mode === 'candle' || mode === 'kagi') && streamInterval !== undefined;
 
   // Merge a live kline tick into the candle set: reshape the active candle,
   // or append the freshly opened one when the interval rolls over.
@@ -154,7 +156,7 @@ export default function PriceChart({ symbol, kind, height = 320, showRanges = tr
           </div>
         )}
         <div className="flex gap-1" title="Chart type">
-          {(['candle', 'line'] as const).map((m) => (
+          {(['candle', 'kagi', 'line'] as const).map((m) => (
             <button
               key={m}
               onClick={() => setMode(m)}
@@ -162,10 +164,25 @@ export default function PriceChart({ symbol, kind, height = 320, showRanges = tr
                 mode === m ? 'bg-primary-600 text-white' : 'text-muted hover:bg-panel hover:text-txt'
               }`}
             >
-              {m === 'candle' ? 'Candles' : 'Line'}
+              {m === 'candle' ? 'Candles' : m === 'kagi' ? 'Kagi' : 'Line'}
             </button>
           ))}
         </div>
+        {mode === 'kagi' && (
+          <div className="flex items-center gap-2" title="Kagi reversal sensitivity — how far price must move against the trend before the line turns. Lower = more turns (more sensitive), higher = only major moves.">
+            <span className="text-[10px] font-semibold text-muted">Sensitivity</span>
+            <input
+              type="range"
+              min={0.25}
+              max={5}
+              step={0.25}
+              value={kagiRev}
+              onChange={(e) => setKagiRev(Number(e.target.value))}
+              className="h-1 w-24 cursor-pointer appearance-none rounded-full bg-line accent-emerald-400"
+            />
+            <span className="w-9 font-mono text-[10px] font-semibold text-muted">{kagiRev}%</span>
+          </div>
+        )}
       </div>
 
       <div className="relative" style={{ height }}>
@@ -184,6 +201,9 @@ export default function PriceChart({ symbol, kind, height = 320, showRanges = tr
         )}
         {!loading && !error && mode === 'candle' && candles && candles.length > 0 && (
           <CandleChart key={symbol} candles={candles} height={height - 24} range={range} />
+        )}
+        {!loading && !error && mode === 'kagi' && candles && candles.length > 0 && (
+          <KagiChart key={`${symbol}-${kagiRev}`} candles={candles} height={height - 24} reversalPct={kagiRev} />
         )}
         {!loading && !error && points && (mode === 'line' || !candles || candles.length === 0) && (
           <ResponsiveContainer width="100%" height="100%">
