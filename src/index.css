@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: 250 250 250;
+  --surface: 255 255 255;
+  --panel: 244 244 245;
+  --line: 228 228 231;
+  --txt: 24 24 27;
+  --muted: 113 113 122;
+  --up: 5 150 105;
+  --down: 225 29 72;
+}
+
+.dark {
+  --bg: 8 11 15;
+  --surface: 15 20 26;
+  --panel: 22 28 36;
+  --line: 39 48 58;
+  --txt: 226 232 236;
+  --muted: 125 137 148;
+  --up: 52 211 153;
+  --down: 251 113 133;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-bg text-txt font-sans antialiased;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--line));
+  border-radius: 8px;
+}
+
+@layer components {
+  .card {
+    @apply rounded-xl border border-line bg-surface;
+  }
+  .input {
+    @apply w-full rounded-lg border border-line bg-panel px-3 py-2.5 text-sm text-txt placeholder-muted outline-none transition-colors focus:border-primary-500;
+  }
+  .label {
+    @apply mb-1.5 block text-xs font-medium uppercase tracking-wide text-muted;
+  }
+}
