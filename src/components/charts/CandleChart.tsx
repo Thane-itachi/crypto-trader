@@ -72,7 +72,7 @@ export default function CandleChart({ candles, height, range }: Props) {
     const plotW = width - PAD.left - PAD.right;
     const plotH = height - PAD.top - PAD.bottom;
     const slot = plotW / view.length;
-    const bodyW = Math.max(1.5, Math.min(slot * 0.62, 26));
+    const bodyW = Math.max(1.2, Math.min(slot * 0.55, 14)); // compact candles, thinner when dense
     const y = (v: number) => PAD.top + (1 - (v - lo) / (hi - lo)) * plotH;
     const x = (i: number) => PAD.left + slot * i + slot / 2;
     return { lo, hi, plotW, plotH, slot, bodyW, y, x };
