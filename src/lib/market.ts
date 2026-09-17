@@ -264,9 +264,9 @@ const RANGE_DAYS: Record<ChartRange, number> = {
 };
 
 const RANGE_POINTS: Record<ChartRange, number> = {
-  '5m': 96,
+  '5m': 288,
   '15m': 96,
-  '1H': 48,
+  '1H': 168,
   '1D': 24,
   '1W': 28,
   '1M': 30,
@@ -284,14 +284,15 @@ export async function fetchSeries(
     const asset = CRYPTO_ASSETS.find((a) => a.symbol === symbol);
     if (asset) {
       const days = RANGE_DAYS[range];
-      // Intraday (5m/15m/1H): real 5-minute close series (1H uses 2 days of
-      // hourly closes), bucketed into candles. 15m/1H get true OHLC; 5m is
-      // derived (open = previous close) since each bucket holds one price.
+      // Intraday (5m/15m/1H): real close series bucketed into candles.
+      // 15m/1H get true OHLC; 5m is derived (open = previous close) since each
+      // bucket holds one price.
       if (range === '5m' || range === '15m' || range === '1H') {
         try {
-          // 1H pulls 2 days (hourly granularity) so we get 48 hourly candles;
-          // 5m/15m use 1 day of 5-minute prices.
-          const seriesDays = range === '1H' ? 2 : 1;
+          // Deep history so pan/zoom-out can reach older data:
+          // 5m = full 24h of 5-min closes (288 candles),
+          // 15m = 24h (96), 1H = 7 days of hourly closes (168).
+          const seriesDays = range === '1H' ? 7 : 1;
           const res = await spaced(() => fetch(`${COINGECKO}/coins/${asset.id}/market_chart?vs_currency=usd&days=${seriesDays}`));
           if (!res.ok) throw new Error(`CoinGecko ${res.status}`);
           const data = await res.json();
@@ -300,8 +301,8 @@ export async function fetchSeries(
           const pts = prices.map(([t, p]) => ({ t, p }));
           const candles =
             range === '5m'
-              ? candlesFromPoints(pts.slice(-96)) // last 8h as 5-minute candles
-              : bucketCandles(pts, range === '15m' ? 900_000 : 3_600_000, range === '15m' ? 24 : 48);
+              ? candlesFromPoints(pts) // full day of 5-minute candles
+              : bucketCandles(pts, range === '15m' ? 900_000 : 3_600_000, range === '15m' ? 24 : 168);
           if (candles.length >= 2) {
             const points = candles.map((c) => ({ t: c.t, p: c.c }));
             return { points, candles, isDemo: false };
