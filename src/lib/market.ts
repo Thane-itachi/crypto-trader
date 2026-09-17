@@ -171,6 +171,30 @@ function spaced<T>(fn: () => Promise<T>, gapMs = 600): Promise<T> {
 // Every plotted level traces to a real API price — never synthetic.
 // ---------------------------------------------------------------------------
 
+// Bucket a real close series into true OHLC candles by time interval:
+// each bucket's open = first real price in it, close = last, high/low = extremes.
+function bucketCandles(points: ChartPoint[], intervalMs: number, windowHours: number): Candle[] {
+  const cutoff = Date.now() - windowHours * 3_600_000;
+  const buckets = new Map<number, ChartPoint[]>();
+  for (const p of points) {
+    if (p.t < cutoff) continue;
+    const k = Math.floor(p.t / intervalMs) * intervalMs;
+    const arr = buckets.get(k);
+    if (arr) arr.push(p);
+    else buckets.set(k, [p]);
+  }
+  return [...buckets.keys()].sort((a, b) => a - b).map((t) => {
+    const ps = buckets.get(t)!;
+    return {
+      t,
+      o: ps[0].p,
+      c: ps[ps.length - 1].p,
+      h: Math.max(...ps.map((x) => x.p)),
+      l: Math.min(...ps.map((x) => x.p)),
+    };
+  });
+}
+
 function candlesFromPoints(points: ChartPoint[]): Candle[] {
   const out: Candle[] = [];
   for (let i = 0; i < points.length; i++) {
@@ -229,6 +253,8 @@ export function fetchMarketSnapshot(tick: number): Promise<MarketSnapshot> {
 }
 
 const RANGE_DAYS: Record<ChartRange, number> = {
+  '5m': 1,
+  '15m': 1,
   '1H': 1,
   '1D': 1,
   '1W': 7,
@@ -238,7 +264,9 @@ const RANGE_DAYS: Record<ChartRange, number> = {
 };
 
 const RANGE_POINTS: Record<ChartRange, number> = {
-  '1H': 12,
+  '5m': 48,
+  '15m': 48,
+  '1H': 24,
   '1D': 24,
   '1W': 28,
   '1M': 30,
@@ -254,30 +282,51 @@ export async function fetchSeries(
 ): Promise<{ points: ChartPoint[]; candles: Candle[]; isDemo: boolean }> {
   if (kind === 'crypto') {
     const asset = CRYPTO_ASSETS.find((a) => a.symbol === symbol);
-    const days = RANGE_DAYS[range];
-    if (asset && range !== '1H') {
-      // 1) Real OHLC candles straight from CoinGecko
-      try {
-        const candles = await liveCryptoOHLC(asset.id, days);
-        const points = candles.map((c) => ({ t: c.t, p: c.c }));
-        return { points, candles, isDemo: false };
-      } catch {
-        // fall through to close series
-      }
-    }
     if (asset) {
-      // 2) Real close series, aggregated into candles (open = previous close)
-      try {
-        const res = await spaced(() => fetch(`${COINGECKO}/coins/${asset.id}/market_chart?vs_currency=usd&days=${days}`));
-        if (!res.ok) throw new Error(`CoinGecko ${res.status}`);
-        const data = await res.json();
-        const prices: [number, number][] = data?.prices;
-        if (!Array.isArray(prices) || prices.length === 0) throw new Error('empty series');
-        let points = prices.map(([t, p]) => ({ t, p }));
-        if (range === '1H') points = points.slice(-12);
-        return { points, candles: candlesFromPoints(points), isDemo: false };
-      } catch {
-        // fall through to demo
+      const days = RANGE_DAYS[range];
+      // Intraday (5m/15m/1H): real 5-minute close series from the last 24h,
+      // bucketed into candles. 15m/1H get true OHLC; 5m is derived
+      // (open = previous close) since each bucket holds a single real price.
+      if (range === '5m' || range === '15m' || range === '1H') {
+        try {
+          const res = await spaced(() => fetch(`${COINGECKO}/coins/${asset.id}/market_chart?vs_currency=usd&days=1`));
+          if (!res.ok) throw new Error(`CoinGecko ${res.status}`);
+          const data = await res.json();
+          const prices: [number, number][] = data?.prices;
+          if (!Array.isArray(prices) || prices.length === 0) throw new Error('empty series');
+          const pts = prices.map(([t, p]) => ({ t, p }));
+          const candles =
+            range === '5m'
+              ? candlesFromPoints(pts.slice(-48)) // last 4h as 5-minute candles
+              : bucketCandles(pts, range === '15m' ? 900_000 : 3_600_000, range === '15m' ? 12 : 24);
+          if (candles.length >= 2) {
+            const points = candles.map((c) => ({ t: c.t, p: c.c }));
+            return { points, candles, isDemo: false };
+          }
+          throw new Error('too few candles');
+        } catch {
+          // fall through to demo
+        }
+      } else {
+        // Swing (1D+): real OHLC candles straight from CoinGecko
+        try {
+          const candles = await liveCryptoOHLC(asset.id, days);
+          const points = candles.map((c) => ({ t: c.t, p: c.c }));
+          return { points, candles, isDemo: false };
+        } catch {
+          // fall through to close series
+        }
+        try {
+          const res = await spaced(() => fetch(`${COINGECKO}/coins/${asset.id}/market_chart?vs_currency=usd&days=${days}`));
+          if (!res.ok) throw new Error(`CoinGecko ${res.status}`);
+          const data = await res.json();
+          const prices: [number, number][] = data?.prices;
+          if (!Array.isArray(prices) || prices.length === 0) throw new Error('empty series');
+          const points = prices.map(([t, p]) => ({ t, p }));
+          return { points, candles: candlesFromPoints(points), isDemo: false };
+        } catch {
+          // fall through to demo
+        }
       }
     }
   }
@@ -285,7 +334,15 @@ export async function fetchSeries(
   const n = RANGE_POINTS[range];
   const vol = DEMO_BASE_PRICES[symbol]?.volatility ?? 0.01;
   const stepMs =
-    range === '1H' ? 300_000 : range === '1D' ? 3_600_000 : (RANGE_DAYS[range] * 86_400_000) / n;
+    range === '5m'
+      ? 300_000
+      : range === '15m'
+        ? 900_000
+        : range === '1H'
+          ? 3_600_000
+          : range === '1D'
+            ? 3_600_000
+            : (RANGE_DAYS[range] * 86_400_000) / n;
   const rand = mulberry32(symbol.charCodeAt(0) * 131 + RANGE_DAYS[range]);
   const deltas: number[] = [];
   let sum = 0;
@@ -314,7 +371,7 @@ export async function fetchSeriesCached(
 ) {
   const key = `${symbol}:${kind}:${range}`;
   const cached = seriesCache.get(key);
-  const ttl = range === '1H' || range === '1D' ? 120_000 : 600_000;
+  const ttl = range === '5m' || range === '15m' || range === '1H' || range === '1D' ? 120_000 : 600_000;
   if (cached && Date.now() - cached.at < ttl) return cached;
   const fresh = await fetchSeries(symbol, kind, range, currentPrice);
   seriesCache.set(key, { points: fresh.points, candles: fresh.candles, isDemo: fresh.isDemo, at: Date.now() });

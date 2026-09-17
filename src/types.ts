@@ -1,6 +1,6 @@
 export type AssetKind = 'crypto' | 'fiat';
 export type MarketStatus = 'loading' | 'live' | 'demo' | 'unavailable';
-export type ChartRange = '1H' | '1D' | '1W' | '1M' | '3M' | '1Y';
+export type ChartRange = '5m' | '15m' | '1H' | '1D' | '1W' | '1M' | '3M' | '1Y';
 export type Side = 'buy' | 'sell';
 
 export interface AssetDef {

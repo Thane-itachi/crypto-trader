@@ -6,7 +6,7 @@ import { useMarket } from '../../context/MarketContext';
 import type { Candle, ChartPoint, ChartRange } from '../../types';
 import { Badge } from '../ui';
 
-const RANGES: ChartRange[] = ['1H', '1D', '1W', '1M', '3M', '1Y'];
+const RANGES: ChartRange[] = ['5m', '15m', '1H', '1D', '1W', '1M', '3M', '1Y'];
 
 interface Props {
   symbol: string;
@@ -128,7 +128,7 @@ export default function PriceChart({ symbol, kind, height = 320, showRanges = tr
                 axisLine={false}
                 minTickGap={40}
                 tickFormatter={(t: number) =>
-                  range === '1H' || range === '1D'
+                  range === '5m' || range === '15m' || range === '1H' || range === '1D'
                     ? new Date(t).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
                     : new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
                 }
