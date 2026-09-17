@@ -11,7 +11,7 @@ interface MarketMoveEvent {
   type: 'market';
   symbol: string;
   price: number;
-  change24h: number | null;
+  deltaPct: number; // actual tick delta between two polls, derived from real market data
   timestamp: number;
   isLive: boolean;
 }
@@ -41,15 +41,20 @@ export default function LiveActivity() {
 
     for (const [symbol, quote] of Object.entries(quotes)) {
       nextPrev[symbol] = quote.price;
-      if (!isFirstLoad && prev[symbol] !== undefined && prev[symbol] !== quote.price) {
+      if (
+        !isFirstLoad &&
+        prev[symbol] !== undefined &&
+        prev[symbol] !== quote.price &&
+        prev[symbol] > 0
+      ) {
         newEvents.push({
           id: `mkt-${symbol}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
           type: 'market',
           symbol: quote.symbol,
           price: quote.price,
-          change24h: quote.change24h,
+          deltaPct: ((quote.price - prev[symbol]) / prev[symbol]) * 100,
           timestamp: Date.now(),
-          isLive: status === 'live',
+          isLive: status === 'live' && !quote.isDemo,
         });
       }
     }
@@ -140,11 +145,11 @@ export default function LiveActivity() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="font-mono font-bold text-xs text-txt">{event.symbol}</span>
-                      <PriceChange value={event.change24h} />
+                      <PriceChange value={event.deltaPct} />
                     </div>
                     <div className="mt-0.5">
                       <Badge tone={event.isLive ? 'up' : 'neutral'} className="text-[10px] py-0 px-1.5">
-                        {event.isLive ? 'LIVE' : 'DEMO'}
+                        {event.isLive ? 'LIVE PRICE TICK' : 'DEMO PRICE TICK'}
                       </Badge>
                     </div>
                   </div>

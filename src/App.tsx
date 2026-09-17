@@ -62,8 +62,8 @@ function ScrollToTop() {
 
 export default function App() {
   return (
-    <NotificationsProvider>
-      <AuthProvider>
+    <AuthProvider>
+      <NotificationsProvider>
         <MarketProvider>
           <PortfolioProvider>
             <ScrollToTop />
@@ -97,7 +97,7 @@ export default function App() {
             </Suspense>
           </PortfolioProvider>
         </MarketProvider>
-      </AuthProvider>
-    </NotificationsProvider>
+      </NotificationsProvider>
+    </AuthProvider>
   );
 }

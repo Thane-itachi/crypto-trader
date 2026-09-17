@@ -8,106 +8,116 @@ no real-money transactions.**
 
 - **React 18 + TypeScript + Vite**
 - **Tailwind CSS** (dark-mode-first design system, custom theme tokens)
-- **Supabase** — authentication, PostgreSQL database, Row Level Security, server-side validated trading (RPC)
+- **Supabase** — authentication, PostgreSQL, Row Level Security, server-side trading
 - **Recharts** — interactive price charts and portfolio allocation
 - **CoinGecko** — live crypto market data (public API, no key required)
 - **open.er-api.com** — live fiat FX rates (public API, no key required)
-- **Vercel** — frontend hosting (SPA rewrites configured in `vercel.json`)
+- **Supabase Edge Function (`refresh-prices`)** — the only writer of trade execution prices
+- **Vercel** — frontend hosting (SPA rewrites in `vercel.json`)
 
-No Prisma. No heavyweight dependencies.
+No Firebase. No Prisma. One backend: Supabase.
 
-## Features
+## Security architecture (trading)
 
-- Email/password authentication with persistent sessions (Supabase Auth)
-- **$10,000 virtual USD (DEMO FUNDS)** granted on signup
-- Server-side validated paper-trading engine (atomic BUY/SELL with balance checks, holdings, avg entry price, realized + unrealized P/L)
-- Live market dashboard: 9 crypto assets + 8 fiat currencies, 30s polling, LIVE/DEMO status
-- Interactive charts (1H/1D/1W/1M/3M/1Y) with clearly labeled demo fallback
-- Global search (⌘K), asset detail pages, market movers
-- Portfolio with allocation chart, watchlist, transaction history with filters
-- Currency converter, live market activity feed, notifications + toast center
-- Dark/light theme, fully responsive (mobile bottom nav + drawer)
+The browser has **no trade-price authority and no balance authority**:
+
+1. Trade execution prices live in the `asset_prices` table, written **only** by the
+   `refresh-prices` Edge Function using the service-role key. Clients can read, never write.
+2. `execute_trade()` reads the price server-side from `asset_prices` and rejects trades when the
+   price is missing or older than **10 minutes**. The client cannot submit or influence the price.
+3. `execute_trade()` enforces a **server-side asset allowlist**: only
+   BTC, ETH, SOL, XRP, BNB, ADA, DOGE, USDT, USDC may ever be traded.
+4. `portfolios`, `holdings`, and `transactions` are **SELECT-only** for clients (RLS).
+   Every mutation — balance, holdings, avg-price, realized P/L, transaction rows, even failed
+   attempts (`status='failed'`) — happens inside the security-definer RPC. The browser has no
+   write path to money data.
+5. Authentication is Supabase Auth (sessions persist across refreshes and devices). Passwords
+   are never stored, hashed, or handled manually by the app.
+6. Only public keys reach the browser (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`).
+   The service-role key exists only as an Edge Function secret / vault entry.
+
+## P/L accounting
+
+- **Average entry**: weighted average across repeated buys at different prices (computed server-side).
+- **Realized P/L**: on every (partial or full) sell: `proceeds − sold quantity × avg entry`, accumulated in `portfolios.realized_pl` — selling a whole position does not erase history.
+- **Unrealized P/L**: open holdings: `quantity × (current price − avg entry)`.
+- **Total P/L** = realized + unrealized; **return %** = total P/L ÷ (current cost basis + realized cost basis).
+- **24h P/L**: exact relative to the reported 24h change (`value − value/(1+chg/100)`), based on live market quotes.
 
 ## Demo-data policy
 
-Market data comes live from the configured APIs. If an API is unavailable, the app switches to a
-clearly labeled **DEMO MARKET DATA** fallback (per-asset badges, status pill, chart labels) and
-never presents fallback data as live.
+Display market data comes live from the configured APIs. If an API is unavailable, the app
+switches to a clearly labeled **DEMO MARKET DATA** fallback (status pill, per-row badges, chart
+labels) and never presents fallback data as live. Fiat historical charts are demo-labeled because
+the FX provider serves latest rates only — they are never described as real FX history.
 
 ## Setup
 
-### 1. Supabase
+### 1. Supabase (database + auth)
 
 1. Create a project at [supabase.com](https://supabase.com).
-2. Open **SQL Editor** and run the entire contents of [`supabase/schema.sql`](supabase/schema.sql).
-   This creates tables, RLS policies, the new-user trigger ($10,000 demo funds + profile), and the
-   `execute_trade` server-side trading function.
+2. **SQL Editor** → run the entire [`supabase/schema.sql`](supabase/schema.sql).
+   This creates all tables, RLS policies (money tables are read-only for clients), the new-user
+   trigger ($10,000 DEMO FUNDS + profile), and the hardened `execute_trade` function.
 3. Copy **Settings → API → Project URL** and **anon public key**.
 
-### 2. Environment
+### 2. Price feed (required for trading)
+
+`execute_trade` only executes at fresh server-side prices, so deploy the feed:
+
+1. Install the Supabase CLI, then from the project root:
+   ```bash
+   supabase functions deploy refresh-prices --no-verify-jwt
+   ```
+2. Schedule it every 2 minutes: follow [`supabase/cron.sql`](supabase/cron.sql)
+   (stores the service-role key in the vault, then pg_cron + pg_net calls the function).
+3. Verify: `asset_prices` should contain 17 rows with recent `updated_at`.
+
+Without the feed, the app still shows live market prices and charts, but trading is disabled
+with a clear "server price feed not running or stale" message.
+
+### 3. Environment
 
 ```bash
 cp .env.example .env
-# then fill in:
 # VITE_SUPABASE_URL=https://your-project.supabase.co
 # VITE_SUPABASE_ANON_KEY=your-anon-key
 ```
 
-The anon key is a public key by design — all data access is protected by Row Level Security.
-Never put the **service-role** key in frontend code.
-
-### 3. Run
+### 4. Run / build
 
 ```bash
 npm install
 npm run dev      # http://localhost:5173
-npm run build    # production build (tsc + vite)
+npm run build    # tsc + vite production build
 ```
 
 ## Deploy to Vercel
 
 1. Push this repo to GitHub.
-2. In Vercel: **Add New → Project → Import** the repo.
-3. Add the environment variables `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
-4. Deploy (framework auto-detected: Vite; SPA rewrites come from `vercel.json`).
+2. Vercel → **Add New → Project → Import** the repo.
+3. Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
+4. Deploy. SPA rewrites for direct navigation to `/app/*` routes come from `vercel.json`.
 
 ## Architecture
 
 ```
-Market APIs (CoinGecko / FX)
-        ↓
-src/lib/market.ts  (service + demo fallback, caching, rate-conscious polling)
-        ↓
-src/context/MarketContext.tsx
-        ↓
-Application (pages/components)
-
-User trading data:
-Supabase Auth → profiles / portfolios / holdings / transactions / watchlist_items
-        ↓
-execute_trade RPC (server-side validation, atomic) → PortfolioContext → UI
+Display data:   CoinGecko / FX API → src/lib/market.ts (live + labeled demo fallback) → MarketContext → UI
+Execution data:  Edge Function refresh-prices → asset_prices (service-role writes) → execute_trade RPC
+User data:       Supabase Auth → profiles / portfolios / holdings / transactions / watchlist_items / notifications
+Notifications:  persisted per user in the notifications table (loaded on login, read state synced)
 ```
 
-- `src/context/` — Auth, Market, Portfolio, Notifications providers
-- `src/lib/market.ts` — market-data layer (live + demo fallback, isolated from user data)
-- `src/components/charts/` — PriceChart, AllocationPie
-- `src/pages/` — route-level code-split pages
-- `supabase/schema.sql` — full database schema, RLS, trading function
+## Notifications
 
-## Security notes
-
-- Passwords handled exclusively by Supabase Auth (never stored or hashed manually).
-- Row Level Security on every user-owned table: users can only read/write their own rows.
-- Trade validation runs server-side in the `execute_trade` Postgres function; the client-side
-  checks are only for UX.
-- Only public keys/env vars reach the browser.
+Persistent: stored in the `notifications` table per user, loaded on login, and read/clear state
+is synced to the database. Toasts provide instant in-session feedback.
 
 ## Known limitations
 
-- Order execution uses the current market price at submit time (true market order simulation;
-  limit/stop orders are a planned next step).
-- Fiat historical charts use the demo fallback (the FX API serves latest rates only); they are
-  labeled as demo chart data.
-- Notifications are session-based; the `notifications` table exists in the schema for future
-  persistence.
+- Market orders execute at the server price captured by the 2-minute feed (no limit/stop orders yet).
+- Fiat historical charts use the labeled demo fallback (FX provider serves latest rates only).
+- Portfolio valuation on dashboards uses live client-side quotes for display; execution always
+  uses the server-side price, so display and execution prices can differ slightly.
+- 24h P/L is exact relative to the API-reported 24h change (not tick-level).
 - Paper trading only. Not financial advice.

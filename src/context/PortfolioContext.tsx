@@ -6,6 +6,15 @@ import { useMarket } from './MarketContext';
 import { useNotifications } from './NotificationsContext';
 import type { Holding, TradeAmountType, TradeResult, Txn } from '../types';
 
+const PRICE_FRESH_MS = 10 * 60 * 1000; // must match execute_trade's staleness window
+
+interface ServerPrice {
+  symbol: string;
+  price: number;
+  change24h: number | null;
+  updated_at: string;
+}
+
 interface PortfolioCtx {
   loading: boolean;
   cash: number;
@@ -20,6 +29,7 @@ interface PortfolioCtx {
   totalPL: number;
   totalPLPercent: number | null;
   todayPL: number;
+  serverPriceOf: (symbol: string) => { price: number; fresh: boolean; updatedAt: number | null };
   executeTrade: (symbol: string, side: 'buy' | 'sell', amount: number, amountType: TradeAmountType) => Promise<TradeResult>;
   addToWatchlist: (symbol: string) => Promise<void>;
   removeFromWatchlist: (symbol: string) => Promise<void>;
@@ -45,7 +55,34 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [transactions, setTransactions] = useState<Txn[]>([]);
   const [watchlist, setWatchlist] = useState<string[]>([]);
+  const [serverPrices, setServerPrices] = useState<Record<string, ServerPrice>>({});
 
+  // ---------- server-authoritative prices (asset_prices, written by the Edge Function) ----------
+  const loadServerPrices = useCallback(async () => {
+    const { data } = await supabase.from('asset_prices').select('symbol, price, change24h, updated_at');
+    const map: Record<string, ServerPrice> = {};
+    for (const row of (data ?? []) as ServerPrice[]) map[row.symbol] = row;
+    setServerPrices(map);
+  }, []);
+
+  useEffect(() => {
+    loadServerPrices();
+    const t = setInterval(loadServerPrices, 60_000);
+    return () => clearInterval(t);
+  }, [loadServerPrices]);
+
+  const serverPriceOf = useCallback(
+    (symbol: string) => {
+      const sp = serverPrices[symbol.toUpperCase()];
+      if (!sp || !sp.price || sp.price <= 0) return { price: 0, fresh: false, updatedAt: null };
+      const updatedAt = new Date(sp.updated_at).getTime();
+      const fresh = Date.now() - updatedAt <= PRICE_FRESH_MS;
+      return { price: sp.price, fresh, updatedAt };
+    },
+    [serverPrices],
+  );
+
+  // ---------- user trading data ----------
   const refresh = useCallback(async () => {
     if (!user) {
       setCash(0);
@@ -77,57 +114,50 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     refresh();
   }, [refresh]);
 
+  // ---------- trading ----------
   const executeTrade = useCallback(
     async (symbol: string, side: 'buy' | 'sell', amount: number, amountType: TradeAmountType): Promise<TradeResult> => {
       const sym = symbol.toUpperCase();
-      const price = priceOf(sym);
-      const fail = (message: string): TradeResult => {
+      const fail = async (message: string): Promise<TradeResult> => {
         notify('error', 'Trade failed', message);
+        await refresh(); // pull any server-recorded failed attempt into history
         return { ok: false, message };
       };
 
-      // --- client-side pre-validation (server re-validates authoritatively) ---
+      // Shape validation only. Balance/ownership/price decisions are made
+      // server-side in execute_trade; the server records failed attempts.
       if (!Number.isFinite(amount) || amount <= 0) return fail('Enter a valid amount');
-      if (!price || price <= 0) return fail('Market price unavailable for ' + sym);
-      if (side === 'buy') {
-        if (amountType === 'usd' && amount > cash) return fail('Insufficient demo balance');
-      } else {
-        const held = holdings.find((h) => h.symbol === sym)?.quantity ?? 0;
-        if (amountType === 'qty' && amount > held) return fail('Insufficient ' + sym + ' balance');
+
+      const sp = serverPriceOf(sym);
+      if (!sp.price || !sp.fresh) {
+        return fail('Market price unavailable — the server price feed is not running or prices are stale.');
       }
 
-      const usdAmount = side === 'buy' ? (amountType === 'usd' ? amount : amount * price) : amount;
-      const qtyAmount = side === 'buy' ? amount : (amountType === 'qty' ? amount : amount / price);
-      const rpcArgs =
+      const amountToSend =
         side === 'buy'
-          ? { p_side: 'buy', p_symbol: sym, p_amount: Number(usdAmount.toFixed(2)), p_price: price }
-          : { p_side: 'sell', p_symbol: sym, p_amount: Number(qtyAmount.toFixed(8)), p_price: price };
+          ? amountType === 'usd'
+            ? Number(amount.toFixed(2))
+            : Number((amount * sp.price).toFixed(2))
+          : amountType === 'qty'
+            ? Number(amount.toFixed(8))
+            : Number((amount / sp.price).toFixed(8));
 
-      const { data, error } = await supabase.rpc('execute_trade', rpcArgs);
+      const { data, error } = await supabase.rpc('execute_trade', {
+        p_side: side,
+        p_symbol: sym,
+        p_amount: amountToSend,
+      });
       const result = (data ?? null) as { ok?: boolean; message?: string } | null;
 
       if (error || !result || result.ok !== true) {
-        const message = result?.message || error?.message || 'Unable to execute trade. Please try again.';
-        // record the failed attempt in history (best-effort)
-        supabase
-          .from('transactions')
-          .insert({
-            symbol: sym,
-            side,
-            quantity: qtyAmount,
-            price,
-            total: usdAmount,
-            status: 'failed',
-          })
-          .then(() => refresh());
-        return fail(message);
+        return fail(result?.message || error?.message || 'Unable to execute trade. Please try again.');
       }
 
       notify('success', 'Trade completed', result.message ?? '');
       await refresh();
       return { ok: true, message: result.message ?? 'Order completed' };
     },
-    [cash, holdings, priceOf, notify, refresh],
+    [serverPriceOf, notify, refresh],
   );
 
   const addToWatchlist = useCallback(
@@ -135,7 +165,12 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       const sym = symbol.toUpperCase();
       if (watchlist.includes(sym) || !user) return;
       setWatchlist((w) => [...w, sym]);
-      await supabase.from('watchlist_items').insert({ symbol: sym });
+      const { error } = await supabase.from('watchlist_items').insert({ symbol: sym });
+      if (error) {
+        setWatchlist((w) => w.filter((s) => s !== sym));
+        notify('error', 'Could not add to watchlist', error.message);
+        return;
+      }
       notify('success', 'Added to watchlist', `${sym} was added to your watchlist.`);
     },
     [user, watchlist, notify],
@@ -146,9 +181,12 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       const sym = symbol.toUpperCase();
       if (!user) return;
       setWatchlist((w) => w.filter((s) => s !== sym));
-      await supabase.from('watchlist_items').delete().eq('symbol', sym);
+      const { error } = await supabase.from('watchlist_items').delete().eq('symbol', sym);
+      if (error) {
+        notify('error', 'Could not remove from watchlist', error.message);
+      }
     },
-    [user],
+    [user, notify],
   );
 
   const derived = useMemo(() => {
@@ -156,10 +194,13 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     const invested = holdings.reduce((sum, h) => sum + h.quantity * h.avg_price, 0);
     const unrealizedPL = holdings.reduce((sum, h) => sum + h.quantity * (priceOf(h.symbol) - h.avg_price), 0);
     const totalPL = unrealizedPL + realizedPL;
+    // Exact relative to the reported 24h change:
+    // previousValue = value / (1 + change24h/100); todayPL = value - previousValue
     const todayPL = holdings.reduce((sum, h) => {
       const chg = quotes[h.symbol]?.change24h;
       const val = h.quantity * priceOf(h.symbol);
-      return sum + (chg != null ? val * (chg / 100) : 0);
+      if (chg === null || chg === undefined || chg <= -100) return sum;
+      return sum + (val - val / (1 + chg / 100));
     }, 0);
     return {
       portfolioValue: cash + holdingsValue,
@@ -182,6 +223,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
         ...derived,
         realizedPL,
         realizedCost,
+        serverPriceOf,
         executeTrade,
         addToWatchlist,
         removeFromWatchlist,

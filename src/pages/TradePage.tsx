@@ -13,7 +13,7 @@ import type { Side } from '../types';
 export default function TradePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { getQuote } = useMarket();
-  const { cash, holdings, executeTrade } = usePortfolio();
+  const { cash, holdings, executeTrade, serverPriceOf } = usePortfolio();
 
   const paramSymbol = (searchParams.get('symbol') || 'BTC').toUpperCase();
   const symbol = CRYPTO_ASSETS.some((a) => a.symbol === paramSymbol) ? paramSymbol : 'BTC';
@@ -29,16 +29,21 @@ export default function TradePage() {
     if (s === 'sell' || s === 'buy') setSide(s);
   }, [searchParams]);
 
-  const quote = getQuote(symbol);
-  const price = quote?.price ?? 0;
+  // Execution uses the SERVER-AUTHORITATIVE price from asset_prices
+  // (written by the refresh-prices Edge Function). Display uses live market data.
+  const serverPrice = serverPriceOf(symbol);
+  const price = serverPrice.price;
+  const priceAvailable = serverPrice.fresh;
+
+  const displayQuote = getQuote(symbol);
   const heldQty = holdings.find((h) => h.symbol === symbol)?.quantity ?? 0;
   const amountNum = parseFloat(amount);
   const valid = Number.isFinite(amountNum) && amountNum > 0;
 
   const estQty = valid && price > 0 && side === 'buy' ? amountNum / price : null;
   const estProceeds = valid && price > 0 && side === 'sell' ? amountNum * price : null;
-  const available = side === 'buy' ? cash : heldQty;
 
+  // UX hint only — the server makes the authoritative decision and records failed attempts.
   const insufficiency =
     !valid
       ? null
@@ -76,7 +81,7 @@ export default function TradePage() {
   };
 
   const submit = async () => {
-    if (!valid || insufficiency || busy || price <= 0) return;
+    if (!valid || busy || !priceAvailable) return;
     setBusy(true);
     setResult(null);
     const res =
@@ -92,7 +97,7 @@ export default function TradePage() {
     <div className="space-y-6">
       <PageHeader
         title="Trade"
-        subtitle="Execute simulated market orders with your virtual DEMO FUNDS. PAPER TRADING only — no real money."
+        subtitle="Simulated market orders executed at the server-verified price. PAPER TRADING only — no real money."
         actions={<Badge tone="accent">PAPER TRADING</Badge>}
       />
 
@@ -119,16 +124,24 @@ export default function TradePage() {
         {/* RIGHT: trading panel */}
         <Card className="h-fit p-5">
           <div className="flex items-center justify-between">
-            <span className="font-mono text-sm font-bold">
-              {symbol} / USD
-            </span>
-            {quote?.isDemo ? <Badge tone="accent">DEMO PRICE</Badge> : <Badge tone="up">LIVE</Badge>}
+            <span className="font-mono text-sm font-bold">{symbol} / USD</span>
+            {priceAvailable ? (
+              <Badge tone="up">SERVER PRICE</Badge>
+            ) : (
+              <Badge tone="down">NO SERVER PRICE</Badge>
+            )}
           </div>
           <p className="mt-1 font-mono text-2xl font-bold">{fmtPrice(price)}</p>
-          <div className="mt-1 text-sm">
-            <PriceChange value={quote?.change24h ?? null} />
-            <span className="ml-2 text-xs text-muted">24h</span>
+          <div className="mt-1 flex items-center gap-2 text-sm">
+            <span className="text-muted">Market 24h:</span>
+            <PriceChange value={displayQuote?.change24h ?? null} />
           </div>
+          {serverPrice.updatedAt && (
+            <p className="mt-1 text-[11px] text-muted">
+              Execution price updated{' '}
+              {new Date(serverPrice.updatedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+            </p>
+          )}
 
           {/* BUY / SELL tabs */}
           <div className="mt-4 grid grid-cols-2 gap-2">
@@ -155,7 +168,7 @@ export default function TradePage() {
             <span className="text-muted">Order type</span>
             <span className="flex items-center gap-1.5 font-semibold">
               Market
-              <Info size={13} className="text-muted" aria-label="Market order executes at the current market price" />
+              <Info size={13} className="text-muted" aria-label="Market order executes at the server-verified current price" />
             </span>
           </div>
 
@@ -191,7 +204,7 @@ export default function TradePage() {
           {/* Estimates */}
           <div className="mt-4 space-y-2 rounded-lg bg-panel p-3 text-sm">
             <div className="flex justify-between">
-              <span className="text-muted">Estimated price</span>
+              <span className="text-muted">Execution price (server)</span>
               <span className="font-mono font-semibold">{fmtPrice(price)}</span>
             </div>
             <div className="flex justify-between">
@@ -222,17 +235,20 @@ export default function TradePage() {
             </div>
           </div>
 
-          {/* Validation banner */}
+          {/* Price feed warning (blocks execution) */}
+          {!priceAvailable && (
+            <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-500">
+              <AlertCircle size={14} className="mt-0.5 shrink-0" />
+              Server price feed not running or stale. Deploy the refresh-prices Edge Function
+              (see README) to enable trading.
+            </div>
+          )}
+
+          {/* Insufficient balance warning (non-blocking: the server validates and records failed attempts) */}
           {valid && insufficiency && (
             <div className="mt-3 flex items-center gap-2 rounded-lg border border-down/30 bg-down/10 px-3 py-2 text-xs font-semibold text-down">
               <AlertCircle size={14} />
               {insufficiency}
-            </div>
-          )}
-          {valid && !insufficiency && price <= 0 && (
-            <div className="mt-3 flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-500">
-              <AlertCircle size={14} />
-              Market price unavailable for {symbol}
             </div>
           )}
 
@@ -242,7 +258,7 @@ export default function TradePage() {
             className="mt-4 w-full"
             size="lg"
             loading={busy}
-            disabled={!valid || !!insufficiency || price <= 0}
+            disabled={!valid || !priceAvailable}
             onClick={submit}
           >
             {side === 'buy' ? `Buy ${symbol}` : `Sell ${symbol}`}
@@ -263,8 +279,8 @@ export default function TradePage() {
           )}
 
           <p className="mt-4 text-[11px] leading-relaxed text-muted">
-            Simulated market order. Every trade is validated server-side and recorded in your
-            transaction history. Virtual funds only.
+            Simulated market order. The execution price and every balance check are verified
+            server-side and recorded in your transaction history. Virtual funds only.
           </p>
         </Card>
       </div>

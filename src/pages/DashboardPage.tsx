@@ -88,7 +88,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="card p-5">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted">Today's P/L</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted">24h P/L</p>
           <p className={`mt-2 text-2xl font-bold font-mono ${todayPL >= 0 ? 'text-up' : 'text-down'}`}>
             {fmtSignedUSD(todayPL)}
           </p>
