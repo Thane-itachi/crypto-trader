@@ -1,19 +1,18 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { supabase } from '../lib/supabase';
+import {
+  collection,
+  deleteDoc,
+  doc,
+  onSnapshot,
+  serverTimestamp,
+  setDoc,
+} from 'firebase/firestore';
+import { auth, db, isFirebaseConfigured } from '../lib/firebase';
 import { useAuth } from './AuthContext';
 import { useMarket } from './MarketContext';
 import { useNotifications } from './NotificationsContext';
 import type { Holding, TradeAmountType, TradeResult, Txn } from '../types';
-
-const PRICE_FRESH_MS = 10 * 60 * 1000; // must match execute_trade's staleness window
-
-interface ServerPrice {
-  symbol: string;
-  price: number;
-  change24h: number | null;
-  updated_at: string;
-}
 
 interface PortfolioCtx {
   loading: boolean;
@@ -29,7 +28,6 @@ interface PortfolioCtx {
   totalPL: number;
   totalPLPercent: number | null;
   todayPL: number;
-  serverPriceOf: (symbol: string) => { price: number; fresh: boolean; updatedAt: number | null };
   executeTrade: (symbol: string, side: 'buy' | 'sell', amount: number, amountType: TradeAmountType) => Promise<TradeResult>;
   addToWatchlist: (symbol: string) => Promise<void>;
   removeFromWatchlist: (symbol: string) => Promise<void>;
@@ -55,36 +53,11 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [transactions, setTransactions] = useState<Txn[]>([]);
   const [watchlist, setWatchlist] = useState<string[]>([]);
-  const [serverPrices, setServerPrices] = useState<Record<string, ServerPrice>>({});
 
-  // ---------- server-authoritative prices (asset_prices, written by the Edge Function) ----------
-  const loadServerPrices = useCallback(async () => {
-    const { data } = await supabase.from('asset_prices').select('symbol, price, change24h, updated_at');
-    const map: Record<string, ServerPrice> = {};
-    for (const row of (data ?? []) as ServerPrice[]) map[row.symbol] = row;
-    setServerPrices(map);
-  }, []);
-
+  // ---------- real-time Firestore listeners ----------
   useEffect(() => {
-    loadServerPrices();
-    const t = setInterval(loadServerPrices, 60_000);
-    return () => clearInterval(t);
-  }, [loadServerPrices]);
-
-  const serverPriceOf = useCallback(
-    (symbol: string) => {
-      const sp = serverPrices[symbol.toUpperCase()];
-      if (!sp || !sp.price || sp.price <= 0) return { price: 0, fresh: false, updatedAt: null };
-      const updatedAt = new Date(sp.updated_at).getTime();
-      const fresh = Date.now() - updatedAt <= PRICE_FRESH_MS;
-      return { price: sp.price, fresh, updatedAt };
-    },
-    [serverPrices],
-  );
-
-  // ---------- user trading data ----------
-  const refresh = useCallback(async () => {
-    if (!user) {
+    const uid = user?.uid ?? null;
+    if (!uid || !isFirebaseConfigured) {
       setCash(0);
       setRealizedPL(0);
       setRealizedCost(0);
@@ -94,25 +67,69 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       return;
     }
-    setLoading(true);
-    const [p, h, t, w] = await Promise.all([
-      supabase.from('portfolios').select('cash, realized_pl, realized_cost').eq('user_id', user.id).single(),
-      supabase.from('holdings').select('symbol, quantity, avg_price').eq('user_id', user.id),
-      supabase.from('transactions').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(200),
-      supabase.from('watchlist_items').select('symbol').eq('user_id', user.id),
-    ]);
-    setCash(p.data ? Number(p.data.cash) : 0);
-    setRealizedPL(p.data ? Number(p.data.realized_pl) : 0);
-    setRealizedCost(p.data ? Number(p.data.realized_cost) : 0);
-    setHoldings(((h.data as Holding[] | null) ?? []).map((x) => ({ ...x, quantity: Number(x.quantity), avg_price: Number(x.avg_price) })));
-    setTransactions(((t.data as Txn[] | null) ?? []).map((x) => ({ ...x, quantity: Number(x.quantity), price: Number(x.price), total: Number(x.total) })));
-    setWatchlist((((w.data as { symbol: string }[] | null) ?? []).map((x) => x.symbol)));
-    setLoading(false);
-  }, [user]);
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+    setLoading(true);
+    const portfolioRef = doc(db, 'users', uid, 'portfolio', 'main');
+    const holdingsRef = collection(db, 'users', uid, 'holdings');
+    const watchlistRef = collection(db, 'users', uid, 'watchlist');
+
+    const unsubs: (() => void)[] = [];
+
+    unsubs.push(
+      onSnapshot(portfolioRef, (snap) => {
+        const data = snap.data();
+        setCash(data ? Number(data.cash) : 0);
+        setRealizedPL(data ? Number(data.realized_pl) : 0);
+        setRealizedCost(data ? Number(data.realized_cost) : 0);
+        setLoading(false);
+      }),
+    );
+
+    unsubs.push(
+      onSnapshot(holdingsRef, (snap) => {
+        setHoldings(
+          snap.docs.map((d) => ({
+            symbol: d.id,
+            quantity: Number(d.data().quantity),
+            avg_price: Number(d.data().avg_price),
+          })),
+        );
+      }),
+    );
+
+    unsubs.push(
+      onSnapshot(collection(db, 'users', uid, 'transactions'), (snap) => {
+        const txns: Txn[] = snap.docs.map((d) => {
+          const data = d.data();
+          const createdAt = data.created_at;
+          return {
+            id: d.id,
+            created_at: typeof createdAt?.toMillis === 'function' ? new Date(createdAt.toMillis()).toISOString() : new Date().toISOString(),
+            symbol: data.symbol,
+            side: data.side,
+            quantity: Number(data.quantity),
+            price: Number(data.price),
+            total: Number(data.total),
+            status: data.status,
+          };
+        });
+        txns.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        setTransactions(txns.slice(0, 200));
+      }),
+    );
+
+    unsubs.push(
+      onSnapshot(watchlistRef, (snap) => {
+        setWatchlist(snap.docs.map((d) => d.id));
+      }),
+    );
+
+    return () => unsubs.forEach((u) => u());
+  }, [user?.uid]);
+
+  const refresh = useCallback(async () => {
+    // Firestore listeners keep state live; no manual fetch needed.
+  }, []);
 
   // ---------- trading ----------
   const executeTrade = useCallback(
@@ -120,58 +137,67 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       const sym = symbol.toUpperCase();
       const fail = async (message: string): Promise<TradeResult> => {
         notify('error', 'Trade failed', message);
-        await refresh(); // pull any server-recorded failed attempt into history
         return { ok: false, message };
       };
 
-      // Shape validation only. Balance/ownership/price decisions are made
-      // server-side in execute_trade; the server records failed attempts.
+      // Shape validation only. Price, balance, ownership, allowlist, and atomic
+      // execution are all decided server-side in /api/trade (Firebase Admin SDK),
+      // which also records failed attempts.
       if (!Number.isFinite(amount) || amount <= 0) return fail('Enter a valid amount');
 
-      const sp = serverPriceOf(sym);
-      if (!sp.price || !sp.fresh) {
-        return fail('Market price unavailable — the server price feed is not running or prices are stale.');
-      }
-
+      const quote = quotes[sym];
+      const estPrice = quote?.price ?? 0;
       const amountToSend =
         side === 'buy'
           ? amountType === 'usd'
             ? Number(amount.toFixed(2))
-            : Number((amount * sp.price).toFixed(2))
+            : Number((amount * estPrice).toFixed(2))
           : amountType === 'qty'
             ? Number(amount.toFixed(8))
-            : Number((amount / sp.price).toFixed(8));
+            : Number((amount / estPrice).toFixed(8));
 
-      const { data, error } = await supabase.rpc('execute_trade', {
-        p_side: side,
-        p_symbol: sym,
-        p_amount: amountToSend,
-      });
-      const result = (data ?? null) as { ok?: boolean; message?: string } | null;
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) return fail('Not authenticated');
 
-      if (error || !result || result.ok !== true) {
-        return fail(result?.message || error?.message || 'Unable to execute trade. Please try again.');
+        const res = await fetch('/api/trade', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ side, symbol: sym, amount: amountToSend }),
+        });
+        let result: { ok?: boolean; message?: string } | null = null;
+        try {
+          result = (await res.json()) as { ok?: boolean; message?: string };
+        } catch {
+          // non-JSON response below
+        }
+        if (!res.ok || !result || result.ok !== true) {
+          return fail(result?.message || 'Unable to execute trade. Please try again.');
+        }
+        notify('success', 'Trade completed', result.message ?? '');
+        return { ok: true, message: result.message ?? 'Order completed' };
+      } catch {
+        return fail('Trading service unavailable. Please try again shortly.');
       }
-
-      notify('success', 'Trade completed', result.message ?? '');
-      await refresh();
-      return { ok: true, message: result.message ?? 'Order completed' };
     },
-    [serverPriceOf, notify, refresh],
+    [notify, quotes],
   );
 
   const addToWatchlist = useCallback(
     async (symbol: string) => {
       const sym = symbol.toUpperCase();
-      if (watchlist.includes(sym) || !user) return;
+      if (watchlist.includes(sym) || !user || !isFirebaseConfigured) return;
       setWatchlist((w) => [...w, sym]);
-      const { error } = await supabase.from('watchlist_items').insert({ symbol: sym });
-      if (error) {
+      try {
+        await setDoc(doc(db, 'users', user.uid, 'watchlist', sym), {
+          symbol: sym,
+          added_at: serverTimestamp(),
+        });
+        notify('success', 'Added to watchlist', `${sym} was added to your watchlist.`);
+      } catch {
         setWatchlist((w) => w.filter((s) => s !== sym));
-        notify('error', 'Could not add to watchlist', error.message);
-        return;
+        notify('error', 'Could not add to watchlist', 'Please try again.');
       }
-      notify('success', 'Added to watchlist', `${sym} was added to your watchlist.`);
     },
     [user, watchlist, notify],
   );
@@ -179,11 +205,12 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
   const removeFromWatchlist = useCallback(
     async (symbol: string) => {
       const sym = symbol.toUpperCase();
-      if (!user) return;
+      if (!user || !isFirebaseConfigured) return;
       setWatchlist((w) => w.filter((s) => s !== sym));
-      const { error } = await supabase.from('watchlist_items').delete().eq('symbol', sym);
-      if (error) {
-        notify('error', 'Could not remove from watchlist', error.message);
+      try {
+        await deleteDoc(doc(db, 'users', user.uid, 'watchlist', sym));
+      } catch {
+        notify('error', 'Could not remove from watchlist', 'Please try again.');
       }
     },
     [user, notify],
@@ -223,7 +250,6 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
         ...derived,
         realizedPL,
         realizedCost,
-        serverPriceOf,
         executeTrade,
         addToWatchlist,
         removeFromWatchlist,

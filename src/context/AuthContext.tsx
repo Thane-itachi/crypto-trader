@@ -1,7 +1,15 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { Session, User } from '@supabase/supabase-js';
-import { supabase, isSupabaseConfigured, loadProfile } from '../lib/supabase';
+import {
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut as fbSignOut,
+  updateProfile as fbUpdateProfile,
+} from 'firebase/auth';
+import type { User } from 'firebase/auth';
+import { doc, getDoc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+import { auth, db, isFirebaseConfigured } from '../lib/firebase';
 import type { Profile } from '../types';
 
 interface AuthCtx {
@@ -23,72 +31,62 @@ export function useAuth(): AuthCtx {
   return ctx;
 }
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(true);
+function mapProfile(id: string, data: Record<string, unknown> | undefined): Profile {
+  return {
+    id,
+    display_name: (data?.display_name as string | null) ?? null,
+    avatar_url: (data?.avatar_url as string | null) ?? null,
+    theme: (data?.theme as string) ?? 'dark',
+    notif_trades: (data?.notif_trades as boolean) ?? true,
+    notif_market: (data?.notif_market as boolean) ?? true,
+  };
+}
 
-  useEffect(() => {
-    if (!isSupabaseConfigured) {
-      setLoading(false);
-      return;
-    }
-    supabase.auth
-      .getSession()
-      .then(({ data }: { data: { session: Session | null } }) => {
-        setUser(data.session?.user ?? null);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      if (!session) setProfile(null);
+/** Bootstrap profile + $10,000 DEMO FUNDS portfolio for a new (or partially
+ *  provisioned) account. Firestore security rules only allow creating the
+ *  portfolio doc with exactly the demo seed values — clients can never
+ *  update or delete it; all later mutations happen server-side in /api/trade. */
+async function ensureBootstrap(uid: string, displayName: string | null): Promise<void> {
+  const profileRef = doc(db, 'users', uid, 'profile', 'main');
+  const portfolioRef = doc(db, 'users', uid, 'portfolio', 'main');
+  const [profileSnap, portfolioSnap] = await Promise.all([getDoc(profileRef), getDoc(portfolioRef)]);
+  if (!profileSnap.exists()) {
+    await setDoc(profileRef, {
+      display_name: displayName,
+      avatar_url: null,
+      theme: 'dark',
+      notif_trades: true,
+      notif_market: true,
+      created_at: serverTimestamp(),
     });
-    return () => sub.subscription.unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    if (!user) return;
-    loadProfile(user.id).then(setProfile);
-  }, [user]);
-
-  const signUp = async (email: string, password: string, displayName: string) => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { display_name: displayName } },
+  }
+  if (!portfolioSnap.exists()) {
+    await setDoc(portfolioRef, {
+      cash: 10000,
+      realized_pl: 0,
+      realized_cost: 0,
+      created_at: serverTimestamp(),
     });
-    return { error: error ? error.message : null };
-  };
+  }
+}
 
-  const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error ? error.message : null };
-  };
-
-  const signOut = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    setProfile(null);
-  };
-
-  const updateProfile = async (fields: Partial<Profile>) => {
-    if (!user) return { error: 'Not signed in' };
-    const { error } = await supabase.from('profiles').update(fields).eq('id', user.id);
-    if (!error) {
-      setProfile((p) => (p ? { ...p, ...fields } : p));
-    }
-    return { error: error ? error.message : null };
-  };
-
-  return (
-    <Ctx.Provider
-      value={{ user, profile, loading, configured: isSupabaseConfigured, signUp, signIn, signOut, updateProfile }}
-    >
-      {children}
-    </Ctx.Provider>
-  );
+function authError(code: string): string {
+  switch (code) {
+    case 'auth/invalid-credential':
+    case 'auth/wrong-password':
+    case 'auth/user-not-found':
+      return 'Invalid email or password';
+    case 'auth/email-already-in-use':
+      return 'An account with this email already exists';
+    case 'auth/weak-password':
+      return 'Password must be at least 6 characters';
+    case 'auth/invalid-email':
+      return 'Please enter a valid email address';
+    case 'auth/too-many-requests':
+      return 'Too many attempts — please wait a moment and try again';
+    default:
+      return 'Something went wrong. Please try again.';
+  }
 }
 
 // ---- Theme (dark default, persisted) ----
@@ -108,4 +106,88 @@ export function useTheme() {
     theme,
     toggleTheme: () => setTheme((t) => (t === 'dark' ? 'light' : 'dark')),
   };
+}
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!isFirebaseConfigured) {
+      setLoading(false);
+      return;
+    }
+    let active = true;
+    return onAuthStateChanged(auth, async (u) => {
+      if (!active) return;
+      setUser(u);
+      if (u) {
+        try {
+          const pSnap = await getDoc(doc(db, 'users', u.uid, 'profile', 'main'));
+          if (!pSnap.exists()) {
+            const displayName = u.displayName ?? u.email?.split('@')[0] ?? 'Trader';
+            await ensureBootstrap(u.uid, displayName);
+            setProfile(mapProfile(u.uid, { display_name: displayName }));
+          } else {
+            setProfile(mapProfile(u.uid, pSnap.data()));
+          }
+        } catch {
+          setProfile(mapProfile(u.uid, { display_name: u.displayName }));
+        }
+      } else {
+        setProfile(null);
+      }
+      setLoading(false);
+    });
+  }, []);
+
+  const signUp = useCallback(async (email: string, password: string, displayName: string) => {
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      await fbUpdateProfile(cred.user, { displayName });
+      await ensureBootstrap(cred.user.uid, displayName);
+      return { error: null };
+    } catch (e) {
+      return { error: authError((e as { code?: string }).code ?? '') };
+    }
+  }, []);
+
+  const signIn = useCallback(async (email: string, password: string) => {
+    try {
+      const cred = await signInWithEmailAndPassword(auth, email, password);
+      try {
+        await ensureBootstrap(cred.user.uid, cred.user.displayName);
+      } catch {
+        // self-heal on next auth state change if this fails
+      }
+      return { error: null };
+    } catch (e) {
+      return { error: authError((e as { code?: string }).code ?? '') };
+    }
+  }, []);
+
+  const signOut = useCallback(async () => {
+    await fbSignOut(auth);
+  }, []);
+
+  const updateProfile = useCallback(
+    async (fields: Partial<Profile>) => {
+      if (!user) return { error: 'Not signed in' };
+      try {
+        await updateDoc(doc(db, 'users', user.uid, 'profile', 'main'), fields);
+        setProfile((p) => (p ? { ...p, ...fields } : p));
+        return { error: null };
+      } catch {
+        return { error: 'Could not save your profile. Please try again.' };
+      }
+    },
+    [user],
+  );
+
+  return (
+    <Ctx.Provider value={{ user, profile, loading, configured: isFirebaseConfigured, signUp, signIn, signOut, updateProfile }}>
+      {children}
+    </Ctx.Provider>
+  );
 }

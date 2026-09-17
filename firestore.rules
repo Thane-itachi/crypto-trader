@@ -1,0 +1,67 @@
+rules_version = '2';
+
+// Crypto-Trader Firestore security rules.
+//
+// Money data is READ-ONLY for clients. All writes to portfolio, holdings and
+// transactions happen server-side in the /api/trade Vercel function using the
+// Firebase Admin SDK, which bypasses these rules. A malicious client has no
+// write path to balances — even a fully compromised frontend cannot change cash.
+// The one allowed client write is the initial $10,000 DEMO FUNDS seed, and the
+// rule pins the exact seed values; no update or delete of the portfolio is ever
+// allowed from the client.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    match /users/{uid} {
+      // Profile: owner has full control (display name, avatar, prefs)
+      match /profile/{docId} {
+        allow read, write: if isOwner(uid);
+      }
+
+      // Portfolio (cash, realized P/L): owner READ only.
+      // Create allowed only with the exact $10,000 demo seed; never update/delete.
+      match /portfolio/{docId} {
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid)
+                     && request.resource.data.cash == 10000
+                     && request.resource.data.realized_pl == 0
+                     && request.resource.data.realized_cost == 0;
+        allow update, delete: if false; // server (Admin SDK) only
+      }
+
+      // Holdings: owner READ only — written by the trade engine.
+      match /holdings/{symbol} {
+        allow read: if isOwner(uid);
+        allow write: if false; // server (Admin SDK) only
+      }
+
+      // Transactions (including failed attempts): owner READ only.
+      match /transactions/{id} {
+        allow read: if isOwner(uid);
+        allow write: if false; // server (Admin SDK) only
+      }
+
+      // Watchlist: owner has full control (no balance authority involved)
+      match /watchlist/{symbol} {
+        allow read, write: if isOwner(uid);
+      }
+
+      // Notifications: owner has full control
+      match /notifications/{id} {
+        allow read, write: if isOwner(uid);
+      }
+    }
+
+    // Server-side price cache: readable by signed-in users, written only by
+    // the trade engine (Admin SDK).
+    match /asset_prices/{symbol} {
+      allow read: if request.auth != null;
+      allow write: if false; // server (Admin SDK) only
+    }
+  }
+}

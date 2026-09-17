@@ -25,7 +25,7 @@ export default function DashboardPage() {
 
   const greetingName =
     profile?.display_name ||
-    user?.user_metadata?.display_name ||
+    user?.displayName ||
     user?.email?.split('@')[0] ||
     'Trader';
 

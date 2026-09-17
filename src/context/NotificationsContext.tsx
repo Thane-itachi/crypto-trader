@@ -1,6 +1,18 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { supabase } from '../lib/supabase';
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  limit,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  writeBatch,
+} from 'firebase/firestore';
+import { db, isFirebaseConfigured } from '../lib/firebase';
 import { useAuth } from './AuthContext';
 
 export type NotifType = 'success' | 'error' | 'info' | 'warning';
@@ -32,61 +44,60 @@ export function useNotifications(): NotificationsCtx {
 
 const VALID_TYPES: NotifType[] = ['success', 'error', 'info', 'warning'];
 
-/** Notifications are persisted to the Supabase `notifications` table per user:
- *  they survive refresh, logout/login, and sync read state. */
+/** Notifications are persisted per user in Firestore (users/{uid}/notifications):
+ *  they survive refresh, logout/login, and sync read state in real time. */
 export function NotificationsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notif[]>([]);
-  const loadedForRef = useRef<string | null>(null);
+  const subbedForRef = useRef<string | null>(null);
 
-  // Load the user's persisted notifications on sign-in / account switch
+  // Real-time listener on the user's persisted notifications
   useEffect(() => {
-    const userId = user?.id ?? null;
-    if (loadedForRef.current === userId) return;
-    loadedForRef.current = userId;
-    if (!userId) {
+    const uid = user?.uid ?? null;
+    if (subbedForRef.current === uid) return;
+    subbedForRef.current = uid;
+    if (!uid || !isFirebaseConfigured) {
       setNotifications([]);
       return;
     }
-    supabase
-      .from('notifications')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(30)
-      .then(({ data }) => {
-        if (!data) return;
-        setNotifications(
-          (data as { id: string; type: string; title: string; body: string | null; read: boolean; created_at: string }[]).map((r) => ({
-            id: r.id,
-            type: (VALID_TYPES.includes(r.type as NotifType) ? r.type : 'info') as NotifType,
-            title: r.title,
-            body: r.body ?? undefined,
-            time: new Date(r.created_at).getTime(),
-            read: r.read,
-          })),
-        );
+    const q = query(
+      collection(db, 'users', uid, 'notifications'),
+      orderBy('created_at', 'desc'),
+      limit(30),
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      const items: Notif[] = snap.docs.map((d) => {
+        const data = d.data();
+        const type = data.type as string;
+        const createdAt = data.created_at;
+        return {
+          id: d.id,
+          type: (VALID_TYPES.includes(type as NotifType) ? type : 'info') as NotifType,
+          title: (data.title as string) ?? '',
+          body: (data.body as string | null) ?? undefined,
+          time: typeof createdAt?.toMillis === 'function' ? createdAt.toMillis() : Date.now(),
+          read: Boolean(data.read),
+        };
       });
-  }, [user?.id]);
+      setNotifications(items);
+    });
+    return unsub;
+  }, [user?.uid]);
 
   const notify = useCallback(
     (type: NotifType, title: string, body?: string) => {
-      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-      // Instant session feedback (toast)
+      // Instant session feedback
+      const id = `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       setNotifications((prev) => [{ id, type, title, body, time: Date.now(), read: false }, ...prev].slice(0, 50));
-      // Persist for the signed-in user (best-effort)
-      if (user) {
-        supabase
-          .from('notifications')
-          .insert({ title, body: body ?? null, type })
-          .select('id')
-          .then((res) => {
-            const rows = res.data as unknown as { id: string }[] | null;
-            if (rows && rows.length > 0) {
-              const dbId = rows[0].id;
-              // replace the temp id so read-state updates target the real row
-              setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, id: dbId } : n)));
-            }
-          });
+      // Persist for the signed-in user (best-effort; the listener replaces the temp entry)
+      if (user && isFirebaseConfigured) {
+        addDoc(collection(db, 'users', user.uid, 'notifications'), {
+          title,
+          body: body ?? null,
+          type,
+          read: false,
+          created_at: serverTimestamp(),
+        }).catch(() => {});
       }
     },
     [user],
@@ -94,13 +105,26 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
 
   const markAllRead = useCallback(() => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-    if (user) supabase.from('notifications').update({ read: true }).eq('read', false);
-  }, [user]);
+    if (!user || !isFirebaseConfigured) return;
+    const unread = notifications.filter((n) => !n.read && !n.id.startsWith('tmp-'));
+    if (unread.length === 0) return;
+    const batch = writeBatch(db);
+    for (const n of unread) {
+      batch.update(doc(db, 'users', user.uid, 'notifications', n.id), { read: true });
+    }
+    batch.commit().catch(() => {});
+  }, [user, notifications]);
 
   const clearAll = useCallback(() => {
     setNotifications([]);
-    if (user) supabase.from('notifications').delete();
-  }, [user]);
+    if (!user || !isFirebaseConfigured) return;
+    const owned = notifications.filter((n) => !n.id.startsWith('tmp-'));
+    const batch = writeBatch(db);
+    for (const n of owned) {
+      batch.delete(doc(db, 'users', user.uid, 'notifications', n.id));
+    }
+    batch.commit().catch(() => {});
+  }, [user, notifications]);
 
   return (
     <Ctx.Provider

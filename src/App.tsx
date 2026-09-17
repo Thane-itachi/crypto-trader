@@ -46,9 +46,11 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
       <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-bg px-6 text-center">
         <p className="text-lg font-semibold">Almost there</p>
         <p className="max-w-md text-sm text-muted">
-          Crypto-Trader needs a Supabase project for accounts and demo portfolios. Create one at
-          supabase.com, add your VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY environment variables,
-          and run the SQL from supabase/schema.sql.
+          Crypto-Trader needs a Firebase project for accounts and demo portfolios. Create one at
+          console.firebase.google.com, add your web app config
+          (VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_PROJECT_ID,
+          VITE_FIREBASE_APP_ID), publish firestore.rules, and add the FIREBASE_SERVICE_ACCOUNT
+          server variable to Vercel. Full steps are in the README.
         </p>
       </div>
     );
