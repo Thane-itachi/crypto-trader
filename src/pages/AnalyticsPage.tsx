@@ -257,8 +257,8 @@ export default function AnalyticsPage() {
                 <AreaChart data={stats?.curve ?? []} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
                   <defs>
                     <linearGradient id="eq-grad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#34d399" stopOpacity={0.28} />
-                      <stop offset="100%" stopColor="#34d399" stopOpacity={0} />
+                      <stop offset="0%" stopColor="#10b981" stopOpacity={0.28} />
+                      <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <XAxis
@@ -285,7 +285,7 @@ export default function AnalyticsPage() {
                     formatter={(v: number) => [fmtUSD(v), 'Equity']}
                     contentStyle={{ background: 'rgb(17 24 34)', border: '1px solid rgb(51 65 85)', borderRadius: 8, fontSize: 12 }}
                   />
-                  <Area type="monotone" dataKey="equity" stroke="#34d399" strokeWidth={2} fill="url(#eq-grad)" />
+                  <Area type="monotone" dataKey="equity" stroke="#10b981" strokeWidth={2} fill="url(#eq-grad)" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>

@@ -23,7 +23,7 @@ export function Sparkline({ data, positive, width = 96, height = 32 }: { data: n
   const pts = data
     .map((v, i) => `${(i / (data.length - 1)) * width},${height - ((v - min) / range) * height}`)
     .join(' ');
-  const stroke = positive ? 'rgb(52 211 153)' : 'rgb(251 113 133)';
+  const stroke = positive ? 'rgb(16 185 129)' : 'rgb(244 63 94)';
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="shrink-0">
       <polyline points={pts} fill="none" stroke={stroke} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />

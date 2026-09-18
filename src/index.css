@@ -9,19 +9,20 @@
   --line: 228 228 231;
   --txt: 24 24 27;
   --muted: 113 113 122;
-  --up: 5 150 105;
+  --up: 16 185 129;
   --down: 225 29 72;
 }
 
 .dark {
-  --bg: 8 11 15;
-  --surface: 15 20 26;
-  --panel: 22 28 36;
-  --line: 39 48 58;
-  --txt: 226 232 236;
-  --muted: 125 137 148;
-  --up: 52 211 153;
-  --down: 251 113 133;
+  /* 60-30-10 trading palette: base #0B0E14, structural #151D2A/#94A3B8, accents below */
+  --bg: 11 14 20;
+  --surface: 21 29 42;
+  --panel: 27 36 50;
+  --line: 42 52 66;
+  --txt: 248 250 252;
+  --muted: 148 163 184;
+  --up: 16 185 129;
+  --down: 244 63 94;
 }
 
 html {

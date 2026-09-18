@@ -110,7 +110,7 @@ export default function PriceChart({ symbol, kind, height = 320, showRanges = tr
 
   const changeSrc = candles && candles.length > 1 ? candles.map((c) => ({ p: c.c })) : points;
   const positive = changeSrc && changeSrc.length > 1 ? changeSrc[changeSrc.length - 1].p >= changeSrc[0].p : true;
-  const color = positive ? 'rgb(52 211 153)' : 'rgb(251 113 133)';
+  const color = positive ? 'rgb(16 185 129)' : 'rgb(244 63 94)';
 
   const change = changeSrc && changeSrc.length > 1 ? ((changeSrc[changeSrc.length - 1].p - changeSrc[0].p) / changeSrc[0].p) * 100 : null;
 

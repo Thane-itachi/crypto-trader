@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Candle, ChartRange } from '../../types';
 import { fmtPrice } from '../../lib/format';
 
-const UP = '#34d399';
-const DOWN = '#fb7185';
+const UP = '#10b981';
+const DOWN = '#f43f5e';
 const MUTED = 'rgb(125 137 148)';
 const LINE = 'rgb(51 65 85)';
 const FONT = '10px "JetBrains Mono", monospace';
