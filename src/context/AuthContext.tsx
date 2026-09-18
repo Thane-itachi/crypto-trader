@@ -1,10 +1,12 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
   EmailAuthProvider,
   GoogleAuthProvider,
+  RecaptchaVerifier,
+  signInWithPhoneNumber,
   reauthenticateWithCredential,
   signInWithEmailAndPassword,
   signInWithPopup,
@@ -13,7 +15,7 @@ import {
   signOut as fbSignOut,
   updateProfile as fbUpdateProfile,
 } from 'firebase/auth';
-import type { User } from 'firebase/auth';
+import type { ConfirmationResult, User } from 'firebase/auth';
 import { doc, getDoc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db, isFirebaseConfigured } from '../lib/firebase';
 import type { Profile } from '../types';
@@ -26,6 +28,8 @@ interface AuthCtx {
   signUp: (email: string, password: string, displayName: string) => Promise<{ error: string | null }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   googleSignIn: () => Promise<{ error: string | null }>;
+  sendPhoneCode: (phoneE164: string) => Promise<{ error: string | null }>;
+  confirmPhoneCode: (code: string, displayName: string) => Promise<{ error: string | null }>;
   forgotPassword: (email: string) => Promise<{ error: string | null }>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
@@ -103,6 +107,18 @@ function authError(code: string): string {
       return 'Pop-up blocked — please allow pop-ups for this site and try again';
     case 'auth/unauthorized-domain':
       return 'This domain is not authorized for sign-in';
+    case 'auth/invalid-phone-number':
+      return 'Please enter a valid phone number';
+    case 'auth/invalid-verification-code':
+      return 'That code is incorrect — check the SMS and try again';
+    case 'auth/code-expired':
+      return 'That code has expired — request a new one';
+    case 'auth/missing-verification-code':
+      return 'Please enter the code from the SMS';
+    case 'auth/captcha-check-failed':
+      return 'Human verification failed — please try again';
+    case 'auth/quota-exceeded':
+      return 'SMS quota reached — please try again later';
     default:
       return 'Something went wrong. Please try again.';
   }
@@ -166,6 +182,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const cred = await createUserWithEmailAndPassword(auth, email, password);
       await fbUpdateProfile(cred.user, { displayName });
       await ensureBootstrap(cred.user.uid, displayName);
+      return { error: null };
+    } catch (e) {
+      return { error: authError((e as { code?: string }).code ?? '') };
+    }
+  }, []);
+
+  const confirmationRef = useRef<ConfirmationResult | null>(null);
+  const recaptchaRef = useRef<RecaptchaVerifier | null>(null);
+
+  const sendPhoneCode = useCallback(async (phoneE164: string) => {
+    try {
+      if (!recaptchaRef.current) {
+        recaptchaRef.current = new RecaptchaVerifier(auth, 'phone-recaptcha', { size: 'invisible' });
+      }
+      confirmationRef.current = await signInWithPhoneNumber(auth, phoneE164, recaptchaRef.current);
+      return { error: null };
+    } catch (e) {
+      return { error: authError((e as { code?: string }).code ?? '') };
+    }
+  }, []);
+
+  const confirmPhoneCode = useCallback(async (code: string, displayName: string) => {
+    try {
+      if (!confirmationRef.current) return { error: 'Please request a code first' };
+      const cred = await confirmationRef.current.confirm(code);
+      if (displayName) {
+        try {
+          await fbUpdateProfile(cred.user, { displayName });
+        } catch {
+          // non-fatal
+        }
+      }
+      try {
+        await ensureBootstrap(cred.user.uid, displayName);
+      } catch {
+        // self-heal on next auth state change
+      }
       return { error: null };
     } catch (e) {
       return { error: authError((e as { code?: string }).code ?? '') };
@@ -253,7 +306,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <Ctx.Provider value={{ user, profile, loading, configured: isFirebaseConfigured, signUp, signIn, googleSignIn, forgotPassword, changePassword, signOut, updateProfile }}>
+    <Ctx.Provider value={{ user, profile, loading, configured: isFirebaseConfigured, signUp, signIn, googleSignIn, sendPhoneCode, confirmPhoneCode, forgotPassword, changePassword, signOut, updateProfile }}>
       {children}
     </Ctx.Provider>
   );
