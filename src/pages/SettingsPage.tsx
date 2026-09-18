@@ -125,7 +125,7 @@ export default function SettingsPage() {
             </div>
             <div>
               <h2 className="text-lg font-semibold tracking-tight">Appearance</h2>
-              <p className="text-sm text-muted">Customize how Crypto-Trader looks on your device</p>
+              <p className="text-sm text-muted">Customize how Kryptova looks on your device</p>
             </div>
           </div>
 
@@ -232,7 +232,7 @@ export default function SettingsPage() {
 
           <div className="mt-4 space-y-3 text-sm leading-relaxed text-muted">
             <p>
-              Crypto-Trader operates entirely in <strong className="text-txt">Demo / Paper Trading Mode</strong>.
+              Kryptova operates entirely in <strong className="text-txt">Demo / Paper Trading Mode</strong>.
               All account balances, trade executions, buy/sell orders, and portfolios use virtual funds.
             </p>
             <div className="rounded-lg border border-line bg-panel p-4 space-y-2">

@@ -85,7 +85,7 @@ export function LandingPage() {
             </h1>
 
             <p className="mt-6 text-base sm:text-lg text-muted max-w-2xl mx-auto leading-relaxed">
-              Crypto-Trader is a modern environment for monitoring crypto and currency markets and practicing trading with virtual funds. Master market mechanics without risking real capital.
+              Kryptova is a modern environment for monitoring crypto and currency markets and practicing trading with virtual funds. Master market mechanics without risking real capital.
             </p>
 
             <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
@@ -223,7 +223,7 @@ export function LandingPage() {
                   Built for Safe Learning & Market Exploration
                 </h2>
                 <p className="text-muted leading-relaxed text-sm sm:text-base">
-                  Crypto-Trader is designed strictly for educational paper trading and market observation. You can experiment with trading concepts in a realistic interface without exposing capital to financial risk.
+                  Kryptova is designed strictly for educational paper trading and market observation. You can experiment with trading concepts in a realistic interface without exposing capital to financial risk.
                 </p>
 
                 <div className="space-y-4 pt-2">
@@ -265,7 +265,7 @@ export function LandingPage() {
                     <CandlestickChart size={22} />
                   </div>
                   <div>
-                    <p className="font-bold text-base">Crypto-Trader Simulation Engine</p>
+                    <p className="font-bold text-base">Kryptova Simulation Engine</p>
                     <p className="text-xs text-muted">Educational Platform Overview</p>
                   </div>
                 </div>
@@ -308,7 +308,7 @@ export function LandingPage() {
               <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-600 text-white">
                 <CandlestickChart size={18} />
               </div>
-              <span className="text-sm font-extrabold tracking-wider">CRYPTO-TRADER</span>
+              <span className="text-sm font-extrabold tracking-wider">KRYPTOVA</span>
             </Link>
 
             <div className="flex flex-wrap items-center gap-6 text-sm text-muted">
@@ -328,7 +328,7 @@ export function LandingPage() {
             <p>
               <strong>Disclaimer:</strong> Paper trading only. No real-money transactions. Not financial advice. Crypto assets are volatile.
             </p>
-            <p>© {new Date().getFullYear()} Crypto-Trader. All rights reserved. Built for educational market simulation.</p>
+            <p>© {new Date().getFullYear()} Kryptova. All rights reserved. Built for educational market simulation.</p>
           </div>
         </div>
       </footer>

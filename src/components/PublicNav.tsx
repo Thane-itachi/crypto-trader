@@ -13,7 +13,7 @@ export function PublicNav() {
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-600 text-white">
             <CandlestickChart size={20} />
           </div>
-          <span className="text-base font-extrabold tracking-wider">CRYPTO-TRADER</span>
+          <span className="text-base font-extrabold tracking-wider">KRYPTOVA</span>
         </Link>
 
         {/* Desktop Navigation */}

@@ -97,7 +97,7 @@ export default function AvatarPicker({ avatarUrl, displayName, email, onSet, siz
               onClick={() => setShowPresets((s) => !s)}
               className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-txt transition-colors hover:bg-panel"
             >
-              <LayoutGrid size={16} className="text-primary-400" /> Crypto-Trader avatars
+              <LayoutGrid size={16} className="text-primary-400" /> Kryptova avatars
             </button>
             {showPresets && (
               <div className="grid grid-cols-4 gap-2 p-2">

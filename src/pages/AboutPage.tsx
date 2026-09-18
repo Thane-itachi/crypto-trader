@@ -49,13 +49,13 @@ export function AboutPage() {
           <div className="text-center space-y-4 max-w-3xl mx-auto">
             <Badge tone="accent" className="mx-auto">
               <Sparkles size={12} />
-              About Crypto-Trader
+              About Kryptova
             </Badge>
             <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight">
               A Modern Environment for Paper Trading & Market Research
             </h1>
             <p className="text-muted text-base sm:text-lg leading-relaxed">
-              Crypto-Trader was created to offer an accessible, zero-risk paper trading web application where users can track live cryptocurrency and currency prices, test strategies with virtual funds, and learn market dynamics.
+              Kryptova was created to offer an accessible, zero-risk paper trading web application where users can track live cryptocurrency and currency prices, test strategies with virtual funds, and learn market dynamics.
             </p>
           </div>
 
@@ -201,7 +201,7 @@ export function AboutPage() {
               <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-600 text-white">
                 <CandlestickChart size={18} />
               </div>
-              <span className="text-sm font-extrabold tracking-wider">CRYPTO-TRADER</span>
+              <span className="text-sm font-extrabold tracking-wider">KRYPTOVA</span>
             </Link>
 
             <div className="flex flex-wrap items-center gap-6 text-sm text-muted">
@@ -221,7 +221,7 @@ export function AboutPage() {
             <p>
               <strong>Disclaimer:</strong> Paper trading only. No real-money transactions. Not financial advice. Crypto assets are volatile.
             </p>
-            <p>© {new Date().getFullYear()} Crypto-Trader. All rights reserved. Built for educational market simulation.</p>
+            <p>© {new Date().getFullYear()} Kryptova. All rights reserved. Built for educational market simulation.</p>
           </div>
         </div>
       </footer>
