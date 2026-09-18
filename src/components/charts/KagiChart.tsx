@@ -218,7 +218,7 @@ export default function KagiChart({ candles, height, reversalPct }: Props) {
 
       {hovered && geo && (
         <div
-          className="pointer-events-none absolute top-2 z-10 w-[170px] rounded-lg border border-line bg-surface px-3 py-2 text-xs shadow-lg"
+          className="pointer-events-none absolute top-2 z-10 w-[170px] rounded-lg border border-line bg-panel px-3 py-2 text-xs shadow-lg"
           style={{ left: Math.min(Math.max(geo.x(hover!) - 80, 4), Math.max(width - 174, 4)) }}
         >
           <p className="text-muted">

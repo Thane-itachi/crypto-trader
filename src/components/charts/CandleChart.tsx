@@ -234,7 +234,7 @@ export default function CandleChart({ candles, height, range }: Props) {
       <svg
         width={width}
         height={height}
-        className={`block ${grabbing ? 'cursor-grabbing' : 'cursor-crosshair'}`}
+        className={`block [mask-image:linear-gradient(to_right,transparent,black_24px,black)] ${grabbing ? 'cursor-grabbing' : 'cursor-crosshair'}`}
         style={{ touchAction: 'none' }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -245,8 +245,8 @@ export default function CandleChart({ candles, height, range }: Props) {
         {/* horizontal grid + price labels */}
         {grid.map((g, i) => (
           <g key={`g-${i}`}>
-            <line x1={PAD.left} x2={PAD.left + geo.plotW} y1={g.y} y2={g.y} stroke={LINE} strokeOpacity={0.35} strokeDasharray="2 4" />
-            <text x={PAD.left + geo.plotW + 6} y={g.y + 3} fill={MUTED} fontFamily={FONT}>
+            <line x1={PAD.left} x2={PAD.left + geo.plotW} y1={g.y} y2={g.y} style={{ stroke: 'rgb(var(--line))' }} strokeOpacity={0.5} strokeDasharray="2 4" />
+            <text x={PAD.left + geo.plotW + 6} y={g.y + 3} style={{ fill: 'rgb(var(--muted))' }} fontFamily={FONT}>
               {g.v >= 1000 ? `${(g.v / 1000).toFixed(1)}k` : g.v >= 1 ? g.v.toFixed(2) : g.v.toPrecision(3)}
             </text>
           </g>
@@ -286,6 +286,7 @@ export default function CandleChart({ candles, height, range }: Props) {
                 y={Math.min(geo.y(c.o), geo.y(c.c))}
                 width={geo.bodyW}
                 height={Math.max(1, Math.abs(geo.y(c.o) - geo.y(c.c)))}
+                rx={Math.min(1.5, geo.bodyW / 4)}
                 fill={color}
               />
             </g>
@@ -305,11 +306,34 @@ export default function CandleChart({ candles, height, range }: Props) {
                 y={PAD.top + geo.fullH - barH}
                 width={geo.bodyW}
                 height={Math.max(0.5, barH)}
+                rx={Math.min(1.5, geo.bodyW / 4)}
                 fill={up ? UP : DOWN}
-                opacity={0.3}
+                opacity={0.35}
               />
             );
           })}
+        {/* live edge — dotted line + price tag + pulsing dot, echoes the ticker's LIVE badge */}
+        {(() => {
+          const last = view[view.length - 1];
+          if (!last) return null;
+          const up = last.c >= last.o;
+          const color = up ? UP : DOWN;
+          const yC = geo.y(last.c);
+          const xC = geo.x(view.length - 1);
+          const label = last.c >= 1000 ? `${(last.c / 1000).toFixed(1)}k` : last.c >= 1 ? last.c.toFixed(2) : last.c.toPrecision(3);
+          return (
+            <g>
+              <line x1={xC} x2={PAD.left + geo.plotW + 4} y1={yC} y2={yC} stroke={color} strokeOpacity={0.55} strokeDasharray="2 4" />
+              <circle cx={xC} cy={yC} r={3} fill={color} className="animate-pulse" />
+              <g transform={`translate(${PAD.left + geo.plotW + 6}, ${yC})`}>
+                <rect x={0} y={-9} width={52} height={18} rx={4.5} style={{ fill: 'rgb(var(--panel))' }} stroke={color} strokeWidth={1} />
+                <text x={26} y={4} textAnchor="middle" fontFamily={FONT} fontSize={10} fontWeight={700} fill={color}>
+                  {label}
+                </text>
+              </g>
+            </g>
+          );
+        })()}
       </svg>
 
       {/* zoom controls */}
@@ -345,7 +369,7 @@ export default function CandleChart({ candles, height, range }: Props) {
 
       {hovered && (
         <div
-          className="pointer-events-none absolute top-2 z-10 w-[148px] rounded-lg border border-line bg-surface px-3 py-2 text-xs shadow-lg"
+          className="pointer-events-none absolute top-2 z-10 w-[148px] rounded-lg border border-line bg-panel px-3 py-2 text-xs shadow-lg"
           style={{ left: tooltipLeft }}
         >
           <p className="text-muted">{new Date(hovered.t).toLocaleString('en-US')}</p>
