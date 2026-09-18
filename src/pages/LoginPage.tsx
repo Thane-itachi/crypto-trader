@@ -224,7 +224,7 @@ export default function LoginPage() {
 
           <div className="animate-fade-in mt-6 rounded-lg border border-primary-500/20 bg-primary-500/10 p-3 text-center" style={{ animationDelay: '0.65s' }}>
             <p className="text-xs font-semibold text-primary-400">
-              Paper trading — $10,000 in DEMO FUNDS when you sign up.
+              Paper trading — $100,000 in DEMO FUNDS when you sign up.
             </p>
           </div>
         </Card>

@@ -214,7 +214,7 @@ export default function SignupPage() {
               <CandlestickChart size={28} />
             </div>
             <h1 className="text-2xl font-bold tracking-tight">Create an account</h1>
-            <p className="mt-1 text-sm text-muted">Start paper trading with $10,000 in demo funds</p>
+            <p className="mt-1 text-sm text-muted">Start paper trading with $100,000 in demo funds</p>
           </div>
 
           {success ? (
@@ -491,7 +491,7 @@ export default function SignupPage() {
 
           <div className="mt-6 rounded-lg border border-primary-500/20 bg-primary-500/10 p-3 text-center">
             <p className="text-xs font-semibold text-primary-400">
-              Paper trading — $10,000 in DEMO FUNDS when you sign up.
+              Paper trading — $100,000 in DEMO FUNDS when you sign up.
             </p>
           </div>
         </Card>

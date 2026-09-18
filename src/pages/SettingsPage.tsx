@@ -238,7 +238,7 @@ export default function SettingsPage() {
             <div className="rounded-lg border border-line bg-panel p-4 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="font-medium text-txt">Starting Virtual Balance:</span>
-                <span className="font-mono font-semibold text-up">$10,000.00 USD</span>
+                <span className="font-mono font-semibold text-up">$100,000.00 USD</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="font-medium text-txt">Real Funds Required:</span>

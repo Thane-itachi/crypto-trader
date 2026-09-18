@@ -127,7 +127,7 @@ export default function ProfilePage() {
 
               <div className="flex items-center justify-between border-b border-line pb-3">
                 <span className="text-muted">Initial Funds</span>
-                <span className="font-mono font-semibold text-up">$10,000.00</span>
+                <span className="font-mono font-semibold text-up">$100,000.00</span>
               </div>
 
               <div className="flex items-center justify-between">

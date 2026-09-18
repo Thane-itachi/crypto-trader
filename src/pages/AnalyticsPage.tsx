@@ -10,7 +10,7 @@ import { fmtPct, fmtPrice, fmtUSD, fmtSignedUSD } from '../lib/format';
 import { Badge, Card, EmptyState, PageHeader, Skeleton } from '../components/ui';
 import type { Txn } from '../types';
 
-const START_CASH = 10_000; // initial demo funds
+const START_CASH = 100_000; // initial demo funds
 
 /** A closed round-trip trade: FIFO-matched buys and sells of one symbol. */
 interface ClosedTrade {

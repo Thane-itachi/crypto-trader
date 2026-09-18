@@ -121,10 +121,10 @@ export function LandingPage() {
                   Simulated Environment
                 </Badge>
                 <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
-                  Start with <span className="font-mono text-primary-400">$10,000 DEMO FUNDS</span>
+                  Start with <span className="font-mono text-primary-400">$100,000 DEMO FUNDS</span>
                 </h2>
                 <p className="text-sm sm:text-base text-muted leading-relaxed">
-                  Every account receives $10,000 in virtual funds automatically upon signup. Practice executing buy and sell orders, test portfolio allocation strategies, and learn trading discipline — every single trade is 100% simulated.
+                  Every account receives $100,000 in virtual funds automatically upon signup. Practice executing buy and sell orders, test portfolio allocation strategies, and learn trading discipline — every single trade is 100% simulated.
                 </p>
               </div>
               <div className="shrink-0">
@@ -281,7 +281,7 @@ export function LandingPage() {
                 <div className="space-y-3 font-mono text-xs">
                   <div className="flex justify-between py-1.5 border-b border-line">
                     <span className="text-muted">Starting Balance</span>
-                    <span className="font-semibold text-txt">$10,000.00 USD</span>
+                    <span className="font-semibold text-txt">$100,000.00 USD</span>
                   </div>
                   <div className="flex justify-between py-1.5 border-b border-line">
                     <span className="text-muted">Execution Type</span>

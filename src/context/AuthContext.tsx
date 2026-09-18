@@ -55,7 +55,7 @@ function mapProfile(id: string, data: Record<string, unknown> | undefined): Prof
   };
 }
 
-/** Bootstrap profile + $10,000 DEMO FUNDS portfolio for a new (or partially
+/** Bootstrap profile + $100,000 DEMO FUNDS portfolio for a new (or partially
  *  provisioned) account. Firestore security rules only allow creating the
  *  portfolio doc with exactly the demo seed values — clients can never
  *  update or delete it; all later mutations happen server-side in /api/trade. */
@@ -75,7 +75,7 @@ async function ensureBootstrap(uid: string, displayName: string | null): Promise
   }
   if (!portfolioSnap.exists()) {
     await setDoc(portfolioRef, {
-      cash: 10000,
+      cash: 100000,
       realized_pl: 0,
       realized_cost: 0,
       created_at: serverTimestamp(),

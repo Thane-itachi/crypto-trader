@@ -6,7 +6,7 @@ rules_version = '2';
 // transactions happen server-side in the /api/trade Vercel function using the
 // Firebase Admin SDK, which bypasses these rules. A malicious client has no
 // write path to balances — even a fully compromised frontend cannot change cash.
-// The one allowed client write is the initial $10,000 DEMO FUNDS seed, and the
+// The one allowed client write is the initial $100,000 DEMO FUNDS seed, and the
 // rule pins the exact seed values; no update or delete of the portfolio is ever
 // allowed from the client.
 
@@ -24,11 +24,11 @@ service cloud.firestore {
       }
 
       // Portfolio (cash, realized P/L): owner READ only.
-      // Create allowed only with the exact $10,000 demo seed; never update/delete.
+      // Create allowed only with the exact $100,000 demo seed; never update/delete.
       match /portfolio/{docId} {
         allow read: if isOwner(uid);
         allow create: if isOwner(uid)
-                     && request.resource.data.cash == 10000
+                     && request.resource.data.cash == 100000
                      && request.resource.data.realized_pl == 0
                      && request.resource.data.realized_cost == 0;
         allow update, delete: if false; // server (Admin SDK) only

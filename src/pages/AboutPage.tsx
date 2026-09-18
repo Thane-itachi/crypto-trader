@@ -80,7 +80,7 @@ export function AboutPage() {
                     <span>Zero Financial Risk</span>
                   </div>
                   <p className="text-xs text-muted leading-relaxed">
-                    Every new account is credited with <span className="font-mono text-txt font-semibold">$10,000 in virtual DEMO FUNDS</span> to practice trades freely.
+                    Every new account is credited with <span className="font-mono text-txt font-semibold">$100,000 in virtual DEMO FUNDS</span> to practice trades freely.
                   </p>
                 </div>
 
@@ -179,7 +179,7 @@ export function AboutPage() {
             <Card className="p-8 bg-panel border-line text-center space-y-4">
               <h2 className="text-2xl font-bold tracking-tight">Ready to start paper trading?</h2>
               <p className="text-muted text-sm max-w-xl mx-auto">
-                Create your account in seconds and start practicing with $10,000 in virtual funds right away.
+                Create your account in seconds and start practicing with $100,000 in virtual funds right away.
               </p>
               <div>
                 <Link to="/signup">
