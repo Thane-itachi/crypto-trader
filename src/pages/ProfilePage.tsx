@@ -1,11 +1,10 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, Save, User as UserIcon, Shield, CheckCircle2, ImagePlus, Trash2 } from 'lucide-react';
-import { useRef } from 'react';
-import { processAvatarFile } from '../lib/avatar';
+import { LogOut, Save, User as UserIcon, Shield, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationsContext';
 import { Button, Card, PageHeader, Badge } from '../components/ui';
+import AvatarPicker from '../components/AvatarPicker';
 
 export default function ProfilePage() {
   const { user, profile, updateProfile, signOut } = useAuth();
@@ -13,31 +12,12 @@ export default function ProfilePage() {
   const navigate = useNavigate();
 
   const [displayName, setDisplayName] = useState(profile?.display_name ?? '');
-  const [avatarUrl, setAvatarUrl] = useState(profile?.avatar_url ?? '');
   const [saving, setSaving] = useState(false);
-  const [imgError, setImgError] = useState(false);
   const [signOutLoading, setSignOutLoading] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  const handleAvatarFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = ''; // allow re-picking the same file
-    if (!file) return;
-    const res = await processAvatarFile(file);
-    if ('error' in res) {
-      notify('error', 'Could not use that picture', res.error);
-      return;
-    }
-    setAvatarUrl(res.dataUrl);
-    setImgError(false);
-    notify('success', 'Picture ready', 'Click Save changes to set it as your profile picture.');
-  };
 
   useEffect(() => {
     if (profile) {
       setDisplayName(profile.display_name ?? '');
-      setAvatarUrl(profile.avatar_url ?? '');
-      setImgError(false);
     }
   }, [profile]);
 
@@ -47,7 +27,6 @@ export default function ProfilePage() {
 
     const { error } = await updateProfile({
       display_name: displayName.trim() || null,
-      avatar_url: avatarUrl.trim() || null,
     });
 
     setSaving(false);
@@ -65,7 +44,6 @@ export default function ProfilePage() {
     navigate('/');
   };
 
-  const initial = (displayName.trim() || user?.email || 'U')[0].toUpperCase();
 
   return (
     <div className="space-y-6">
@@ -81,71 +59,18 @@ export default function ProfilePage() {
             <h2 className="mb-4 text-lg font-semibold tracking-tight">Personal Details</h2>
 
             <form onSubmit={handleSave} className="space-y-5">
-              {/* Avatar Preview & URL */}
-              <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
-                <div className="relative shrink-0">
-                  {avatarUrl && !imgError ? (
-                    <img
-                      src={avatarUrl}
-                      alt={displayName || 'Avatar'}
-                      onError={() => setImgError(true)}
-                      className="h-20 w-20 rounded-full border-2 border-primary-500/30 object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary-600 text-2xl font-bold text-txt">
-                      {initial}
-                    </div>
-                  )}
-                </div>
-
-                <div className="w-full space-y-1">
-                  <label htmlFor="avatarUrl" className="label">
-                    Profile Picture
-                  </label>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => fileRef.current?.click()}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-panel px-3 py-2 text-xs font-semibold text-txt transition-colors hover:border-primary-500/60 hover:text-primary-400"
-                    >
-                      <ImagePlus size={14} /> Choose from gallery
-                    </button>
-                    {avatarUrl && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAvatarUrl('');
-                          setImgError(false);
-                        }}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-panel px-3 py-2 text-xs font-semibold text-muted transition-colors hover:border-down/50 hover:text-down"
-                      >
-                        <Trash2 size={14} /> Remove
-                      </button>
-                    )}
-                  </div>
-                  <input
-                    ref={fileRef}
-                    id="avatarUpload"
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp"
-                    className="hidden"
-                    onChange={handleAvatarFile}
-                  />
-                  <input
-                    id="avatarUrl"
-                    type="url"
-                    value={avatarUrl}
-                    onChange={(e) => {
-                      setAvatarUrl(e.target.value);
-                      setImgError(false);
-                    }}
-                    placeholder="…or paste an image URL"
-                    className="input mt-1"
-                  />
-                  <p className="text-xs text-muted">
-                    Upload from your device (PNG/JPG/WebP, max 2 MB) or paste a direct image URL. It saves with your profile.
-                  </p>
-                </div>
+              {/* Avatar: plus badge opens gallery / preset picker */}
+              <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+                <AvatarPicker
+                  avatarUrl={profile?.avatar_url ?? null}
+                  displayName={displayName}
+                  email={user?.email}
+                  onSet={async (url) => updateProfile({ avatar_url: url })}
+                />
+                <p className="text-xs text-muted">
+                  Tap the <span className="font-semibold text-primary-400">+</span> to add a picture from your
+                  gallery or pick one of the built-in Crypto-Trader avatars. Changes save instantly.
+                </p>
               </div>
 
               <div className="space-y-4">
