@@ -60,6 +60,12 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      <div className="animate-fade-in">
+        <div className="brand-name text-5xl sm:text-6xl font-extrabold tracking-tight leading-none">
+          KRYPTOVA
+        </div>
+      </div>
+
       <PageHeader
         title="Dashboard"
         subtitle={`Welcome back, ${greetingName}! Here is your paper trading overview.`}
