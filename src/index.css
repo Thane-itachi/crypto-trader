@@ -127,8 +127,97 @@ body {
   .animate-float {
     animation: none;
   }
+  .orbit-coin {
+    display: none;
+  }
   .brand-name {
     background: none;
     -webkit-text-fill-color: unset;
+  }
+}
+
+/* ---- Orbiting coin (planetary ring around the big KRYPTOVA wordmark) ---- */
+.brand-hero {
+  position: relative;
+  display: inline-block;
+  isolation: isolate;
+}
+.orbit-coin {
+  position: absolute;
+  width: 0.52em;
+  height: 0.52em;
+  transform: translate(-50%, -50%);
+  animation: coin-orbit 5.5s linear infinite;
+  pointer-events: none;
+  z-index: 3;
+}
+@keyframes coin-orbit {
+  0% {
+    left: 50%;
+    top: 135%;
+    z-index: 3;
+  }
+  12.5% {
+    left: 96%;
+    top: 110%;
+    z-index: 3;
+  }
+  25% {
+    left: 115%;
+    top: 50%;
+    z-index: -1;
+  }
+  37.5% {
+    left: 96%;
+    top: -10%;
+    z-index: -1;
+  }
+  50% {
+    left: 50%;
+    top: -35%;
+    z-index: -1;
+  }
+  62.5% {
+    left: 4%;
+    top: -10%;
+    z-index: -1;
+  }
+  75% {
+    left: -15%;
+    top: 50%;
+    z-index: 3;
+  }
+  87.5% {
+    left: 4%;
+    top: 110%;
+    z-index: 3;
+  }
+  100% {
+    left: 50%;
+    top: 135%;
+    z-index: 3;
+  }
+}
+.orbit-coin-face {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.3em;
+  font-weight: 800;
+  color: #7a5b0e;
+  -webkit-text-fill-color: #7a5b0e;
+  background: radial-gradient(circle at 35% 30%, #ffefb8 0%, #f7cf5a 45%, #c8940f 100%);
+  box-shadow:
+    inset 0 -0.06em 0.12em rgba(90, 60, 0, 0.45),
+    inset 0 0.05em 0.08em rgba(255, 255, 255, 0.55),
+    0 0 0.45em rgba(247, 207, 90, 0.35);
+  animation: coin-spin 1.6s linear infinite;
+}
+@keyframes coin-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
