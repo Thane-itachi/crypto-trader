@@ -46,6 +46,13 @@ service cloud.firestore {
         allow write: if false; // server (Admin SDK) only
       }
 
+      // TP/SL orders: owner READ only — written by the /api/orders engine
+      // (Admin SDK). Clients can never create or flip an order themselves.
+      match /orders/{id} {
+        allow read: if isOwner(uid);
+        allow write: if false; // server (Admin SDK) only
+      }
+
       // Watchlist: owner has full control (no balance authority involved)
       match /watchlist/{symbol} {
         allow read, write: if isOwner(uid);

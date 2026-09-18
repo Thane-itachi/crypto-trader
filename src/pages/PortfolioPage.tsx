@@ -1,10 +1,11 @@
-import { useMemo } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { usePortfolio } from '../context/PortfolioContext';
 import { useMarket } from '../context/MarketContext';
 import { findAsset } from '../lib/assets';
 import { fmtPct, fmtPrice, fmtQty, fmtSignedUSD, fmtUSD } from '../lib/format';
 import { Badge, Button, Card, EmptyState, PageHeader, Skeleton } from '../components/ui';
+import { Target, X, Check } from 'lucide-react';
 import AllocationPie from '../components/charts/AllocationPie';
 
 export default function PortfolioPage() {
@@ -20,7 +21,12 @@ export default function PortfolioPage() {
     realizedPL,
     totalPL,
     totalPLPercent,
+    orders,
+    createTPSLOrder,
+    cancelTPSLOrder,
   } = usePortfolio();
+
+  const [editingTPSL, setEditingTPSL] = useState<string | null>(null);
 
   const holdingRows = useMemo(() => {
     return holdings.map((h) => {
@@ -41,6 +47,15 @@ export default function PortfolioPage() {
       };
     });
   }, [holdings, priceOf]);
+
+  const activeOrders = useMemo(
+    () => orders.filter((o) => o.status === 'active'),
+    [orders],
+  );
+  const ordersFor = (symbol: string) => ({
+    tp: activeOrders.find((o) => o.symbol === symbol && o.kind === 'tp'),
+    sl: activeOrders.find((o) => o.symbol === symbol && o.kind === 'sl'),
+  });
 
   const pieData = useMemo(() => {
     return holdingRows.map((h) => ({
@@ -175,13 +190,14 @@ export default function PortfolioPage() {
                       <th className="py-3 px-3 text-right">Current Price</th>
                       <th className="py-3 px-3 text-right">Value</th>
                       <th className="py-3 px-3 text-right">P/L</th>
+                      <th className="py-3 px-3 text-right">TP / SL</th>
                       <th className="py-3 px-3 text-right">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line font-mono">
                     {holdingRows.map((row) => (
+                      <Fragment key={row.symbol}>
                       <tr
-                        key={row.symbol}
                         onClick={() => navigate(`/app/asset/${row.symbol}`)}
                         className="cursor-pointer hover:bg-panel transition-colors"
                       >
@@ -207,6 +223,44 @@ export default function PortfolioPage() {
                           className="py-3 px-3 text-right font-sans"
                           onClick={(e) => e.stopPropagation()}
                         >
+                          <div className="flex items-center justify-end gap-1.5">
+                            {(() => {
+                              const { tp, sl } = ordersFor(row.symbol);
+                              return (
+                                <>
+                                  {tp ? (
+                                    <span className="inline-flex items-center gap-1 rounded bg-up/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-up">
+                                      TP {fmtPrice(tp.trigger_price)}
+                                      <button aria-label="Cancel take-profit" onClick={() => cancelTPSLOrder(tp.id)} className="hover:text-txt">
+                                        <X size={10} />
+                                      </button>
+                                    </span>
+                                  ) : null}
+                                  {sl ? (
+                                    <span className="inline-flex items-center gap-1 rounded bg-down/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-down">
+                                      SL {fmtPrice(sl.trigger_price)}
+                                      <button aria-label="Cancel stop-loss" onClick={() => cancelTPSLOrder(sl.id)} className="hover:text-txt">
+                                        <X size={10} />
+                                      </button>
+                                    </span>
+                                  ) : null}
+                                  <button
+                                    onClick={() => setEditingTPSL(editingTPSL === row.symbol ? null : row.symbol)}
+                                    className="rounded p-1 text-muted transition-colors hover:bg-panel hover:text-primary-400"
+                                    aria-label={`Set take-profit or stop-loss for ${row.symbol}`}
+                                    title="Set take-profit / stop-loss"
+                                  >
+                                    <Target size={15} />
+                                  </button>
+                                </>
+                              );
+                            })()}
+                          </div>
+                        </td>
+                        <td
+                          className="py-3 px-3 text-right font-sans"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <Button
                             variant="down"
                             size="sm"
@@ -218,6 +272,29 @@ export default function PortfolioPage() {
                           </Button>
                         </td>
                       </tr>
+                      {editingTPSL === row.symbol && (
+                        <tr key={`${row.symbol}-tpsl`}>
+                          <td colSpan={8} className="bg-panel px-4 py-3">
+                            <TPSLEditor
+                              symbol={row.symbol}
+                              quantity={row.quantity}
+                              currentPrice={row.currentPrice}
+                              initialTP={ordersFor(row.symbol).tp?.trigger_price}
+                              initialSL={ordersFor(row.symbol).sl?.trigger_price}
+                              onSave={async (tp, sl) => {
+                                const { tp: oldTP, sl: oldSL } = ordersFor(row.symbol);
+                                if (tp > 0) await createTPSLOrder(row.symbol, 'tp', tp, row.quantity);
+                                else if (oldTP) await cancelTPSLOrder(oldTP.id);
+                                if (sl > 0) await createTPSLOrder(row.symbol, 'sl', sl, row.quantity);
+                                else if (oldSL) await cancelTPSLOrder(oldSL.id);
+                                setEditingTPSL(null);
+                              }}
+                              onClose={() => setEditingTPSL(null)}
+                            />
+                          </td>
+                        </tr>
+                      )}
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>
@@ -229,6 +306,86 @@ export default function PortfolioPage() {
         <div>
           <AllocationPie data={pieData} />
         </div>
+      </div>
+    </div>
+  );
+}
+
+
+/** Inline take-profit / stop-loss editor for a position. */
+function TPSLEditor({
+  symbol,
+  quantity,
+  currentPrice,
+  initialTP,
+  initialSL,
+  onSave,
+  onClose,
+}: {
+  symbol: string;
+  quantity: number;
+  currentPrice: number;
+  initialTP?: number;
+  initialSL?: number;
+  onSave: (tp: number, sl: number) => void;
+  onClose: () => void;
+}) {
+  const [tp, setTp] = useState(initialTP ? String(initialTP) : '');
+  const [sl, setSl] = useState(initialSL ? String(initialSL) : '');
+  const tpN = parseFloat(tp);
+  const slN = parseFloat(sl);
+  const tpImminent = tpN > 0 && tpN <= currentPrice;
+  const slImminent = slN > 0 && slN >= currentPrice;
+
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-xs text-muted">
+        Auto-sell {fmtQty(quantity)} {symbol} when price crosses a trigger. Leave a field empty to remove that order.
+      </p>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div>
+          <label className="label text-[10px]" htmlFor={`tp-${symbol}`}>
+            Take-profit at (now {fmtPrice(currentPrice)})
+          </label>
+          <input
+            id={`tp-${symbol}`}
+            type="number"
+            min="0"
+            step="any"
+            inputMode="decimal"
+            placeholder="e.g. 85000"
+            value={tp}
+            onChange={(e) => setTp(e.target.value)}
+            className={`input font-mono text-xs ${tpImminent ? 'border-down/50' : ''}`}
+          />
+          {(tpImminent || slImminent) && (
+            <p className="mt-1 text-[10px] font-semibold text-down">That trigger is already crossed — it would execute on the next check.</p>
+          )}
+        </div>
+        <div>
+          <label className="label text-[10px]" htmlFor={`sl-${symbol}`}>
+            Stop-loss at (now {fmtPrice(currentPrice)})
+          </label>
+          <input
+            id={`sl-${symbol}`}
+            type="number"
+            min="0"
+            step="any"
+            inputMode="decimal"
+            placeholder="e.g. 58000"
+            value={sl}
+            onChange={(e) => setSl(e.target.value)}
+            className={`input font-mono text-xs ${slImminent ? 'border-down/50' : ''}`}
+          />
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <Button variant="primary" size="sm" onClick={() => onSave(tpN > 0 ? tpN : 0, slN > 0 ? slN : 0)}>
+          <Check size={13} /> Save orders
+        </Button>
+        <Button variant="ghost" size="sm" onClick={onClose}>
+          Cancel
+        </Button>
       </div>
     </div>
   );

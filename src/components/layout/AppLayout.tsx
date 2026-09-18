@@ -1,7 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
-  Activity, Bell, CandlestickChart, CircleDollarSign, Compass, Download, Gauge,
+  Activity, BarChart3, Bell, CandlestickChart, CircleDollarSign, Compass, Download, Gauge,
   LayoutDashboard, LogOut, Menu, Moon, PieChart, Search, Settings as SettingsIcon,
   Sun, User as UserIcon, Wallet, X,
 } from 'lucide-react';
@@ -13,13 +13,13 @@ import SearchDialog from './SearchDialog';
 import { usePwaInstall } from '../../hooks/usePwaInstall';
 import NotificationCenter from '../NotificationCenter';
 import Toaster from '../Toaster';
-import { useState } from 'react';
 
 const NAV = [
   { to: '/app', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/app/markets', label: 'Markets', icon: Activity },
   { to: '/app/trade', label: 'Trade', icon: CandlestickChart },
   { to: '/app/portfolio', label: 'Portfolio', icon: PieChart },
+  { to: '/app/analytics', label: 'Analytics', icon: BarChart3 },
   { to: '/app/watchlist', label: 'Watchlist', icon: Gauge },
   { to: '/app/transactions', label: 'Transactions', icon: Wallet },
   { to: '/app/converter', label: 'Converter', icon: CircleDollarSign },
@@ -112,7 +112,7 @@ function NavItem({ to, label, icon: Icon, end, onClick }: { to: string; label: s
 }
 
 export default function AppLayout() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, profile } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -133,7 +133,11 @@ export default function AppLayout() {
     setDrawerOpen(false);
   }, [location.pathname]);
 
-  const initial = (user?.email?.[0] ?? 'U').toUpperCase();
+  const avatarUrl = profile?.avatar_url ?? '';
+  const [avatarFailed, setAvatarFailed] = useState(false);
+  useEffect(() => {
+    setAvatarFailed(false);
+  }, [avatarUrl]);
 
   return (
     <div className="min-h-screen bg-bg">
@@ -221,10 +225,19 @@ export default function AppLayout() {
             </button>
             <Link
               to="/app/profile"
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-600 text-sm font-bold text-white"
+              className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-primary-600 text-sm font-bold text-white ring-1 ring-line transition-transform hover:scale-105"
               title={user?.email ?? 'Profile'}
             >
-              {initial}
+              {avatarUrl && !avatarFailed ? (
+                <img
+                  src={avatarUrl}
+                  alt="Your profile"
+                  onError={() => setAvatarFailed(true)}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                (user?.email?.[0] ?? 'U').toUpperCase()
+              )}
             </Link>
           </div>
         </header>

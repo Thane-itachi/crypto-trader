@@ -4,6 +4,9 @@ import { Bell, Moon, Sun, LogOut, ShieldAlert, DollarSign } from 'lucide-react';
 import { useAuth, useTheme } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationsContext';
 import { Button, Card, PageHeader, Badge } from '../components/ui';
+import { useRef } from 'react';
+import { ImagePlus, UserCircle } from 'lucide-react';
+import { initialsFor, processAvatarFile } from '../lib/avatar';
 
 function ToggleSwitch({
   checked,
@@ -38,12 +41,41 @@ function ToggleSwitch({
 }
 
 export default function SettingsPage() {
-  const { profile, updateProfile, signOut } = useAuth();
+  const { user, profile, updateProfile, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { notify } = useNotifications();
   const navigate = useNavigate();
 
   const [updatingNotif, setUpdatingNotif] = useState<'notif_trades' | 'notif_market' | null>(null);
+  const [avatarBroken, setAvatarBroken] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const res = await processAvatarFile(file);
+    if ('error' in res) {
+      notify('error', 'Could not use that picture', res.error);
+      return;
+    }
+    const { error } = await updateProfile({ avatar_url: res.dataUrl });
+    if (error) {
+      notify('error', 'Upload failed', error);
+    } else {
+      setAvatarBroken(false);
+      notify('success', 'Picture updated', 'Your new profile picture is live.');
+    }
+  };
+
+  const handleAvatarRemove = async () => {
+    const { error } = await updateProfile({ avatar_url: null });
+    if (error) {
+      notify('error', 'Could not remove picture', error);
+    } else {
+      notify('success', 'Picture removed', 'Your profile picture was removed.');
+    }
+  };
   const [signOutLoading, setSignOutLoading] = useState(false);
 
   const handleToggleNotif = async (key: 'notif_trades' | 'notif_market') => {
@@ -113,6 +145,49 @@ export default function SettingsPage() {
                 </>
               )}
             </Button>
+          </div>
+        </Card>
+
+        {/* Profile Picture Card */}
+        <Card className="p-6">
+          <h3 className="mb-4 text-lg font-semibold tracking-tight flex items-center gap-2">
+            <UserCircle size={18} /> Profile Picture
+          </h3>
+          <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+            {profile?.avatar_url && !avatarBroken ? (
+              <img
+                src={profile.avatar_url}
+                alt="Current avatar"
+                onError={() => setAvatarBroken(true)}
+                className="h-16 w-16 rounded-full border-2 border-primary-500/30 object-cover"
+              />
+            ) : (
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary-600 text-xl font-bold text-white">
+                {initialsFor(profile?.display_name, user?.email)}
+              </div>
+            )}
+            <div className="space-y-1">
+              <div className="flex gap-2">
+                <Button variant="primary" size="sm" onClick={() => avatarInputRef.current?.click()}>
+                  <ImagePlus size={14} /> Upload new picture
+                </Button>
+                {profile?.avatar_url && (
+                  <Button variant="ghost" size="sm" onClick={handleAvatarRemove}>
+                    Remove
+                  </Button>
+                )}
+              </div>
+              <p className="text-xs text-muted">
+                Shown in your profile and the top bar. PNG, JPG or WebP up to 2 MB.
+              </p>
+            </div>
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="hidden"
+              onChange={handleAvatarUpload}
+            />
           </div>
         </Card>
 

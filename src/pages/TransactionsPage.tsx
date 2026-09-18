@@ -175,6 +175,12 @@ export default function TransactionsPage() {
                         <Badge tone={txn.side === 'buy' ? 'up' : 'down'}>
                           {txn.side.toUpperCase()}
                         </Badge>
+                        {txn.reason === 'take_profit' && (
+                          <Badge tone="up" className="ml-1.5">TP</Badge>
+                        )}
+                        {txn.reason === 'stop_loss' && (
+                          <Badge tone="down" className="ml-1.5">SL</Badge>
+                        )}
                       </td>
                       <td className="py-3 px-3 text-right text-txt">{fmtQty(txn.quantity)}</td>
                       <td className="py-3 px-3 text-right text-txt">{fmtPrice(txn.price)}</td>

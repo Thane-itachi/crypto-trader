@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { AlertCircle, CheckCircle2, Info } from 'lucide-react';
+import { AlertCircle, CheckCircle2, ChevronDown, Info, Target } from 'lucide-react';
 import { CRYPTO_ASSETS } from '../lib/assets';
 import { fmtPrice, fmtQty, fmtUSD } from '../lib/format';
 import { useMarket } from '../context/MarketContext';
@@ -13,7 +13,7 @@ import type { Side } from '../types';
 export default function TradePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { getQuote, status } = useMarket();
-  const { cash, holdings, executeTrade } = usePortfolio();
+  const { cash, holdings, executeTrade, createTPSLOrder } = usePortfolio();
 
   const paramSymbol = (searchParams.get('symbol') || 'BTC').toUpperCase();
   const symbol = CRYPTO_ASSETS.some((a) => a.symbol === paramSymbol) ? paramSymbol : 'BTC';
@@ -22,6 +22,9 @@ export default function TradePage() {
   const [amount, setAmount] = useState('');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [showTPSL, setShowTPSL] = useState(false);
+  const [tpPrice, setTpPrice] = useState('');
+  const [slPrice, setSlPrice] = useState('');
 
   // Keep BUY/SELL tab in sync when navigated here with ?side=
   useEffect(() => {
@@ -78,6 +81,11 @@ export default function TradePage() {
     if (rounded > 0) setAmount(String(rounded));
   };
 
+  const tpNum = parseFloat(tpPrice);
+  const slNum = parseFloat(slPrice);
+  const tpWarn = side === 'buy' && tpNum > 0 && tpNum <= estPrice;
+  const slWarn = side === 'buy' && slNum > 0 && slNum >= estPrice;
+
   const submit = async () => {
     if (!valid || busy) return;
     setBusy(true);
@@ -87,8 +95,16 @@ export default function TradePage() {
         ? await executeTrade(symbol, 'buy', amountNum, 'usd')
         : await executeTrade(symbol, 'sell', amountNum, 'qty');
     setResult(res);
+    if (res.ok) {
+      setAmount('');
+      // attach TP/SL to the exact executed quantity (server-authoritative)
+      const qty = res.txn?.quantity ?? 0;
+      if (qty > 0 && tpNum > 0) await createTPSLOrder(symbol, 'tp', tpNum, qty);
+      if (qty > 0 && slNum > 0) await createTPSLOrder(symbol, 'sl', slNum, qty);
+      setTpPrice('');
+      setSlPrice('');
+    }
     setBusy(false);
-    if (res.ok) setAmount('');
   };
 
   return (
@@ -188,6 +204,73 @@ export default function TradePage() {
               ))}
             </div>
           </div>
+
+          {/* Take-profit / Stop-loss (optional, buy side) */}
+          {side === 'buy' && (
+            <div className="mt-4">
+              <button
+                onClick={() => setShowTPSL((v) => !v)}
+                className="flex w-full items-center justify-between rounded-lg border border-line px-3 py-2 text-xs font-semibold text-muted transition-colors hover:border-primary-500/50 hover:text-txt"
+              >
+                <span className="flex items-center gap-1.5">
+                  <Target size={13} /> Take-profit / Stop-loss
+                </span>
+                <span className="flex items-center gap-2">
+                  {(tpNum > 0 || slNum > 0) && (
+                    <span className="rounded bg-primary-500/15 px-1.5 py-0.5 font-mono text-[10px] text-primary-500">
+                      {(tpNum > 0 ? 'TP ' : '') + (slNum > 0 ? 'SL' : '')}
+                    </span>
+                  )}
+                  <ChevronDown size={14} className={showTPSL ? 'rotate-180 transition-transform' : 'transition-transform'} />
+                </span>
+              </button>
+              {showTPSL && (
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="label text-[10px]" htmlFor="tp-price">
+                      Take-profit at
+                    </label>
+                    <input
+                      id="tp-price"
+                      type="number"
+                      min="0"
+                      step="any"
+                      inputMode="decimal"
+                      placeholder={`> ${fmtPrice(estPrice)}`}
+                      value={tpPrice}
+                      onChange={(e) => setTpPrice(e.target.value)}
+                      className={`input font-mono text-xs ${tpWarn ? 'border-down/50' : ''}`}
+                    />
+                    <p className="mt-1 text-[10px] text-muted">Auto-sell when price rises to this level.</p>
+                  </div>
+                  <div>
+                    <label className="label text-[10px]" htmlFor="sl-price">
+                      Stop-loss at
+                    </label>
+                    <input
+                      id="sl-price"
+                      type="number"
+                      min="0"
+                      step="any"
+                      inputMode="decimal"
+                      placeholder={`< ${fmtPrice(estPrice)}`}
+                      value={slPrice}
+                      onChange={(e) => setSlPrice(e.target.value)}
+                      className={`input font-mono text-xs ${slWarn ? 'border-down/50' : ''}`}
+                    />
+                    <p className="mt-1 text-[10px] text-muted">Auto-sell to cut the loss if price drops here.</p>
+                  </div>
+                  {(tpWarn || slWarn) && (
+                    <p className="col-span-2 flex items-start gap-1.5 rounded-md border border-down/30 bg-down/10 px-2 py-1.5 text-[10px] font-semibold text-down">
+                      <AlertCircle size={11} className="mt-0.5 shrink-0" />
+                      {tpWarn && 'Take-profit is at or below the current price — it would trigger immediately. '}
+                      {slWarn && 'Stop-loss is at or above the current price — it would trigger immediately.'}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Estimates */}
           <div className="mt-4 space-y-2 rounded-lg bg-panel p-3 text-sm">

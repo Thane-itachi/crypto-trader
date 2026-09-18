@@ -17,6 +17,7 @@ const MarketsPage = lazy(() => import('./pages/MarketsPage'));
 const AssetPage = lazy(() => import('./pages/AssetPage'));
 const TradePage = lazy(() => import('./pages/TradePage'));
 const PortfolioPage = lazy(() => import('./pages/PortfolioPage'));
+const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'));
 const WatchlistPage = lazy(() => import('./pages/WatchlistPage'));
 const TransactionsPage = lazy(() => import('./pages/TransactionsPage'));
 const ConverterPage = lazy(() => import('./pages/ConverterPage'));
@@ -88,6 +89,7 @@ export default function App() {
                   <Route path="asset/:symbol" element={<AssetPage />} />
                   <Route path="trade" element={<TradePage />} />
                   <Route path="portfolio" element={<PortfolioPage />} />
+                  <Route path="analytics" element={<AnalyticsPage />} />
                   <Route path="watchlist" element={<WatchlistPage />} />
                   <Route path="transactions" element={<TransactionsPage />} />
                   <Route path="converter" element={<ConverterPage />} />

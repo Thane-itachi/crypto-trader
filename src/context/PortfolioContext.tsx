@@ -12,7 +12,7 @@ import { auth, db, isFirebaseConfigured } from '../lib/firebase';
 import { useAuth } from './AuthContext';
 import { useMarket } from './MarketContext';
 import { useNotifications } from './NotificationsContext';
-import type { Holding, TradeAmountType, TradeResult, Txn } from '../types';
+import type { Holding, TradeAmountType, TradeResult, TPOrder, Txn } from '../types';
 
 interface PortfolioCtx {
   loading: boolean;
@@ -20,6 +20,10 @@ interface PortfolioCtx {
   holdings: Holding[];
   transactions: Txn[];
   watchlist: string[];
+  orders: TPOrder[];
+  createTPSLOrder: (symbol: string, kind: 'tp' | 'sl', triggerPrice: number, quantity: number) => Promise<{ ok: boolean; message: string }>;
+  cancelTPSLOrder: (id: string) => Promise<void>;
+  settleOrders: () => Promise<void>;
   portfolioValue: number;
   investedValue: number;
   unrealizedPL: number;
@@ -53,6 +57,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [transactions, setTransactions] = useState<Txn[]>([]);
   const [watchlist, setWatchlist] = useState<string[]>([]);
+  const [orders, setOrders] = useState<TPOrder[]>([]);
 
   // ---------- real-time Firestore listeners ----------
   useEffect(() => {
@@ -64,6 +69,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       setHoldings([]);
       setTransactions([]);
       setWatchlist([]);
+      setOrders([]);
       setLoading(false);
       return;
     }
@@ -111,10 +117,33 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
             price: Number(data.price),
             total: Number(data.total),
             status: data.status,
+            reason: data.reason,
           };
         });
         txns.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
         setTransactions(txns.slice(0, 200));
+      }),
+    );
+
+    unsubs.push(
+      onSnapshot(collection(db, 'users', uid, 'orders'), (snap) => {
+        const list: TPOrder[] = snap.docs.map((d) => {
+          const data = d.data();
+          const createdAt = data.created_at;
+          return {
+            id: d.id,
+            symbol: data.symbol,
+            kind: data.kind === 'sl' ? 'sl' : 'tp',
+            trigger_price: Number(data.trigger_price),
+            quantity: Number(data.quantity),
+            status: data.status,
+            created_at: typeof createdAt?.toMillis === 'function' ? new Date(createdAt.toMillis()).toISOString() : new Date().toISOString(),
+            executed_price: data.executed_price !== undefined ? Number(data.executed_price) : undefined,
+            executed_total: data.executed_total !== undefined ? Number(data.executed_total) : undefined,
+          };
+        });
+        list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        setOrders(list);
       }),
     );
 
@@ -165,7 +194,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ side, symbol: sym, amount: amountToSend }),
         });
-        let result: { ok?: boolean; message?: string } | null = null;
+        let result: { ok?: boolean; message?: string; txn?: { symbol: string; side: 'buy' | 'sell'; quantity: number; price: number; total: number } } | null = null;
         try {
           result = (await res.json()) as { ok?: boolean; message?: string };
         } catch {
@@ -175,13 +204,93 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
           return fail(result?.message || 'Unable to execute trade. Please try again.');
         }
         notify('success', 'Trade completed', result.message ?? '');
-        return { ok: true, message: result.message ?? 'Order completed' };
+        return { ok: true, message: result.message ?? 'Order completed', txn: result.txn };
       } catch {
         return fail('Trading service unavailable. Please try again shortly.');
       }
     },
     [notify, quotes],
   );
+
+  // ---------- take-profit / stop-loss orders ----------
+  const postOrders = useCallback(async (body: Record<string, unknown>): Promise<{ ok: boolean; message: string; executed?: unknown[] } | null> => {
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) return null;
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      });
+      let result: { ok?: boolean; message?: string; executed?: unknown[] } | null = null;
+      try {
+        result = await res.json();
+      } catch {
+        // non-JSON response below
+      }
+      if (!res.ok || !result || result.ok !== true) {
+        return { ok: false, message: result?.message || 'Order service unavailable. Please try again.' };
+      }
+      return { ok: true, message: result.message ?? 'Order updated', executed: result.executed };
+    } catch {
+      return { ok: false, message: 'Order service unavailable. Please try again.' };
+    }
+  }, []);
+
+  const createTPSLOrder = useCallback(
+    async (symbol: string, kind: 'tp' | 'sl', triggerPrice: number, quantity: number) => {
+      const sym = symbol.toUpperCase();
+      if (!Number.isFinite(triggerPrice) || triggerPrice <= 0) {
+        return { ok: false, message: 'Enter a valid trigger price' };
+      }
+      if (!Number.isFinite(quantity) || quantity <= 0) {
+        return { ok: false, message: 'Enter a valid quantity' };
+      }
+      const res = await postOrders({ action: 'create', symbol: sym, kind, trigger_price: triggerPrice, quantity });
+      if (res?.ok) {
+        notify('success', kind === 'tp' ? 'Take-profit set' : 'Stop-loss set', res.message);
+      } else if (res) {
+        notify('error', 'Order failed', res.message);
+      }
+      return { ok: !!res?.ok, message: res?.message ?? 'Order service unavailable' };
+    },
+    [notify, postOrders],
+  );
+
+  const cancelTPSLOrder = useCallback(
+    async (id: string) => {
+      const res = await postOrders({ action: 'cancel', id });
+      if (res?.ok) {
+        notify('success', 'Order cancelled', 'The TP/SL order was cancelled.');
+      } else if (res) {
+        notify('error', 'Could not cancel order', res.message);
+      }
+    },
+    [notify, postOrders],
+  );
+
+  /** Ask the server to check active TP/SL orders against live prices.
+   *  Executions happen server-side; here we only surface the results. */
+  const settleOrders = useCallback(async () => {
+    const res = await postOrders({ action: 'settle' });
+    const executed = (res?.executed ?? []) as { symbol: string; kind: 'tp' | 'sl'; quantity: number; price: number; total: number }[];
+    for (const ex of executed) {
+      notify(
+        'success',
+        ex.kind === 'tp' ? 'Take-profit executed' : 'Stop-loss executed',
+        `Sold ${ex.quantity} ${ex.symbol} at $${ex.price} (paper trade)`,
+      );
+    }
+  }, [notify, postOrders]);
+
+  // Poll the order engine while the app is open (server stays authoritative)
+  useEffect(() => {
+    if (!user || !isFirebaseConfigured) return;
+    const t = setInterval(() => {
+      if (document.visibilityState === 'visible') settleOrders();
+    }, 30_000);
+    return () => clearInterval(t);
+  }, [user, settleOrders]);
 
   const addToWatchlist = useCallback(
     async (symbol: string) => {
@@ -247,6 +356,10 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
         holdings,
         transactions,
         watchlist,
+        orders,
+        createTPSLOrder,
+        cancelTPSLOrder,
+        settleOrders,
         ...derived,
         realizedPL,
         realizedCost,
