@@ -1,9 +1,58 @@
-import { useState, FormEvent } from 'react';
+import { useEffect, useRef, useState, FormEvent } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
-import { Phone, Mail } from 'lucide-react';
+import { ChevronDown, Mail, Phone as PhoneIcon, Search } from 'lucide-react';
 import { AlertCircle, ArrowLeft, CandlestickChart, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Button, Card } from '../components/ui';
+
+function flagFor(iso2: string): string {
+  return iso2
+    .toUpperCase()
+    .split('')
+    .map((c) => String.fromCodePoint(127397 + c.charCodeAt(0)))
+    .join('');
+}
+
+interface CountryOption {
+  dial: string;
+  iso2: string;
+  name: string;
+}
+
+const COUNTRY_OPTIONS: CountryOption[] = [
+  { dial: '+212', iso2: 'MA', name: 'Morocco' },
+  { dial: '+234', iso2: 'NG', name: 'Nigeria' },
+  { dial: '+233', iso2: 'GH', name: 'Ghana' },
+  { dial: '+254', iso2: 'KE', name: 'Kenya' },
+  { dial: '+27', iso2: 'ZA', name: 'South Africa' },
+  { dial: '+20', iso2: 'EG', name: 'Egypt' },
+  { dial: '+213', iso2: 'DZ', name: 'Algeria' },
+  { dial: '+216', iso2: 'TN', name: 'Tunisia' },
+  { dial: '+221', iso2: 'SN', name: 'Senegal' },
+  { dial: '+225', iso2: 'CI', name: "Côte d'Ivoire" },
+  { dial: '+1', iso2: 'US', name: 'United States / Canada' },
+  { dial: '+44', iso2: 'GB', name: 'United Kingdom' },
+  { dial: '+33', iso2: 'FR', name: 'France' },
+  { dial: '+34', iso2: 'ES', name: 'Spain' },
+  { dial: '+49', iso2: 'DE', name: 'Germany' },
+  { dial: '+39', iso2: 'IT', name: 'Italy' },
+  { dial: '+31', iso2: 'NL', name: 'Netherlands' },
+  { dial: '+41', iso2: 'CH', name: 'Switzerland' },
+  { dial: '+91', iso2: 'IN', name: 'India' },
+  { dial: '+92', iso2: 'PK', name: 'Pakistan' },
+  { dial: '+880', iso2: 'BD', name: 'Bangladesh' },
+  { dial: '+62', iso2: 'ID', name: 'Indonesia' },
+  { dial: '+63', iso2: 'PH', name: 'Philippines' },
+  { dial: '+90', iso2: 'TR', name: 'Turkey' },
+  { dial: '+966', iso2: 'SA', name: 'Saudi Arabia' },
+  { dial: '+971', iso2: 'AE', name: 'United Arab Emirates' },
+  { dial: '+86', iso2: 'CN', name: 'China' },
+  { dial: '+81', iso2: 'JP', name: 'Japan' },
+  { dial: '+82', iso2: 'KR', name: 'South Korea' },
+  { dial: '+61', iso2: 'AU', name: 'Australia' },
+  { dial: '+55', iso2: 'BR', name: 'Brazil' },
+  { dial: '+52', iso2: 'MX', name: 'Mexico' },
+];
 
 export default function SignupPage() {
   const { user, signUp, googleSignIn, sendPhoneCode, confirmPhoneCode } = useAuth();
@@ -17,6 +66,10 @@ export default function SignupPage() {
   const [success, setSuccess] = useState(false);
   const [mode, setMode] = useState<'email' | 'phone'>('email');
   const [country, setCountry] = useState('+212');
+  const [countryIso, setCountryIso] = useState('MA');
+  const [countryOpen, setCountryOpen] = useState(false);
+  const [countrySearch, setCountrySearch] = useState('');
+  const countryBoxRef = useRef<HTMLDivElement>(null);
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [otpStep, setOtpStep] = useState<'phone' | 'otp'>('phone');
@@ -27,16 +80,33 @@ export default function SignupPage() {
     return <Navigate to="/app" replace />;
   }
 
-  const COUNTRIES: [string, string][] = [
-    ['+212', 'MA (+212)'], ['+234', 'NG (+234)'], ['+233', 'GH (+233)'], ['+254', 'KE (+254)'],
-    ['+27', 'ZA (+27)'], ['+20', 'EG (+20)'], ['+213', 'DZ (+213)'], ['+216', 'TN (+216)'],
-    ['+221', 'SN (+221)'], ['+225', 'CI (+225)'], ['+1', 'US/CA (+1)'], ['+44', 'UK (+44)'],
-    ['+33', 'FR (+33)'], ['+34', 'ES (+34)'], ['+49', 'DE (+49)'], ['+39', 'IT (+39)'],
-    ['+31', 'NL (+31)'], ['+41', 'CH (+41)'], ['+91', 'IN (+91)'], ['+92', 'PK (+92)'],
-    ['+880', 'BD (+880)'], ['+62', 'ID (+62)'], ['+63', 'PH (+63)'], ['+90', 'TR (+90)'],
-    ['+966', 'SA (+966)'], ['+971', 'AE (+971)'], ['+86', 'CN (+86)'], ['+81', 'JP (+81)'],
-    ['+82', 'KR (+82)'], ['+61', 'AU (+61)'], ['+55', 'BR (+55)'], ['+52', 'MX (+52)'],
-  ];
+  const filteredCountries = COUNTRY_OPTIONS.filter((c) => {
+    const q = countrySearch.trim().toLowerCase();
+    if (!q) return true;
+    return c.name.toLowerCase().includes(q) || c.dial.includes(q) || c.iso2.toLowerCase().includes(q);
+  });
+
+  useEffect(() => {
+    if (!countryOpen) return;
+    const onClick = (e: MouseEvent) => {
+      if (countryBoxRef.current && !countryBoxRef.current.contains(e.target as Node)) {
+        setCountryOpen(false);
+        setCountrySearch('');
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setCountryOpen(false);
+        setCountrySearch('');
+      }
+    };
+    document.addEventListener('mousedown', onClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [countryOpen]);
 
   const handleSendCode = async () => {
     if (loading) return;
@@ -200,7 +270,7 @@ export default function SignupPage() {
                       mode === 'phone' ? 'bg-primary-600 text-txt' : 'text-muted hover:text-txt'
                     }`}
                   >
-                    <Phone size={15} /> Phone
+                    <PhoneIcon size={15} /> Phone
                   </button>
                 </div>
               </div>
@@ -298,19 +368,65 @@ export default function SignupPage() {
                     <label htmlFor="phone" className="label">
                       Phone number
                     </label>
-                    <div className="flex gap-2">
-                      <select
-                        value={country}
-                        onChange={(e) => setCountry(e.target.value)}
-                        className="input w-28 shrink-0"
-                        aria-label="Country code"
-                      >
-                        {COUNTRIES.map(([code, label]) => (
-                          <option key={code} value={code}>
-                            {label}
-                          </option>
-                        ))}
-                      </select>
+                    <div
+                      ref={countryBoxRef}
+                      className="flex items-stretch overflow-visible rounded-lg border border-line bg-panel transition-colors focus-within:border-primary-500"
+                    >
+                      <div className="relative shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setCountryOpen((o) => !o)}
+                          aria-haspopup="listbox"
+                          aria-expanded={countryOpen}
+                          aria-label="Select country code"
+                          className="flex h-full items-center gap-1.5 rounded-l-lg border-r border-line px-3 text-sm text-txt transition-colors hover:bg-line/30"
+                        >
+                          <span className="text-base leading-none">{flagFor(countryIso)}</span>
+                          <span className="font-medium tabular-nums">{country}</span>
+                          <ChevronDown size={14} className={`text-muted transition-transform ${countryOpen ? 'rotate-180' : ''}`} />
+                        </button>
+
+                        {countryOpen && (
+                          <div className="absolute left-0 top-[calc(100%+6px)] z-20 w-64 overflow-hidden rounded-lg border border-line bg-surface shadow-xl shadow-black/30">
+                            <div className="relative border-b border-line">
+                              <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+                              <input
+                                autoFocus
+                                type="text"
+                                value={countrySearch}
+                                onChange={(e) => setCountrySearch(e.target.value)}
+                                placeholder="Search country or code..."
+                                className="h-9 w-full bg-transparent pl-9 pr-3 text-sm text-txt placeholder-muted outline-none"
+                              />
+                            </div>
+                            <div className="max-h-56 overflow-y-auto py-1">
+                              {filteredCountries.map((c) => (
+                                <button
+                                  key={c.iso2}
+                                  type="button"
+                                  onClick={() => {
+                                    setCountry(c.dial);
+                                    setCountryIso(c.iso2);
+                                    setCountryOpen(false);
+                                    setCountrySearch('');
+                                  }}
+                                  className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors hover:bg-line/40 ${
+                                    c.iso2 === countryIso ? 'bg-primary-500/10 text-primary-400' : 'text-txt'
+                                  }`}
+                                >
+                                  <span className="text-base leading-none">{flagFor(c.iso2)}</span>
+                                  <span className="flex-1 truncate">{c.name}</span>
+                                  <span className="tabular-nums text-muted">{c.dial}</span>
+                                </button>
+                              ))}
+                              {filteredCountries.length === 0 && (
+                                <p className="px-3 py-3 text-center text-sm text-muted">No matches</p>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
                       <input
                         id="phone"
                         type="tel"
@@ -318,7 +434,7 @@ export default function SignupPage() {
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
                         placeholder="612 34 56 78"
-                        className="input flex-1"
+                        className="flex-1 rounded-r-lg bg-transparent px-3 py-2.5 text-sm text-txt placeholder-muted outline-none"
                         autoComplete="tel-national"
                       />
                     </div>
