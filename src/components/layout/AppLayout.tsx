@@ -148,7 +148,7 @@ export default function AppLayout() {
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-600">
             <CandlestickChart size={18} className="text-white" />
           </div>
-          <span className="font-bold tracking-tight">KRYPTOVA</span>
+          <span className="brand-name font-bold tracking-tight">KRYPTOVA</span>
         </Link>
         <nav className="flex-1 space-y-1 px-3">
           {NAV.map((n) => (
@@ -184,7 +184,7 @@ export default function AppLayout() {
           <div className="absolute inset-0 bg-black/50" onClick={() => setDrawerOpen(false)} />
           <div className="absolute inset-y-0 left-0 flex w-72 flex-col border-r border-line bg-surface p-4">
             <div className="mb-4 flex items-center justify-between">
-              <span className="font-bold tracking-tight">KRYPTOVA</span>
+              <span className="brand-name font-bold tracking-tight">KRYPTOVA</span>
               <button onClick={() => setDrawerOpen(false)} className="rounded-lg p-2 text-muted hover:bg-panel">
                 <X size={18} />
               </button>

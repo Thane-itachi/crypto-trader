@@ -308,7 +308,7 @@ export function LandingPage() {
               <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-600 text-white">
                 <CandlestickChart size={18} />
               </div>
-              <span className="text-sm font-extrabold tracking-wider">KRYPTOVA</span>
+              <span className="brand-name text-sm font-extrabold tracking-wider">KRYPTOVA</span>
             </Link>
 
             <div className="flex flex-wrap items-center gap-6 text-sm text-muted">

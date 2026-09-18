@@ -73,9 +73,9 @@ export default function LoginPage() {
           <ArrowLeft size={16} /> Back to home
         </Link>
 
-        <Card className="p-6 sm:p-8">
+        <Card className="p-6 sm:p-8 animate-card-in">
           <div className="mb-6 flex flex-col items-center text-center">
-            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-primary-600 text-txt">
+            <div className="animate-float mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-primary-600 text-txt shadow-lg shadow-primary-600/25">
               <CandlestickChart size={28} />
             </div>
             <h1 className="text-2xl font-bold tracking-tight">
@@ -110,7 +110,7 @@ export default function LoginPage() {
             </div>
           ) : (
           <form onSubmit={mode === 'signin' ? handleSubmit : handleForgot} className="space-y-4">
-            <div>
+            <div className="animate-fade-in" style={{ animationDelay: '0.25s' }}>
               <label htmlFor="email" className="label">
                 Email address
               </label>
@@ -127,7 +127,7 @@ export default function LoginPage() {
             </div>
 
             {mode === 'signin' && (
-            <div>
+            <div className="animate-fade-in" style={{ animationDelay: '0.35s' }}>
               <label htmlFor="password" className="label">
                 Password
               </label>
@@ -163,14 +163,14 @@ export default function LoginPage() {
             </div>
             )}
 
-            <Button type="submit" variant="primary" loading={loading} className="w-full">
+            <Button type="submit" variant="primary" loading={loading} className="animate-fade-in w-full" style={{ animationDelay: '0.45s' }}>
               {mode === 'signin' ? 'Sign In' : 'Send reset link'}
             </Button>
           </form>
           )}
 
           {mode === 'signin' && (
-          <p className="mt-6 text-center text-sm text-muted">
+          <p className="animate-fade-in mt-6 text-center text-sm text-muted" style={{ animationDelay: '0.55s' }}>
             Don't have an account?{' '}
             <Link to="/signup" className="font-semibold text-primary-400 hover:underline">
               Sign up
@@ -189,7 +189,7 @@ export default function LoginPage() {
             </button>
           </p>)}
 
-          <div className="mt-6 rounded-lg border border-primary-500/20 bg-primary-500/10 p-3 text-center">
+          <div className="animate-fade-in mt-6 rounded-lg border border-primary-500/20 bg-primary-500/10 p-3 text-center" style={{ animationDelay: '0.65s' }}>
             <p className="text-xs font-semibold text-primary-400">
               Paper trading — $10,000 in DEMO FUNDS when you sign up.
             </p>
