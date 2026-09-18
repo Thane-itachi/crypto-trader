@@ -4,8 +4,10 @@ import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
   EmailAuthProvider,
+  GoogleAuthProvider,
   reauthenticateWithCredential,
   signInWithEmailAndPassword,
+  signInWithPopup,
   sendPasswordResetEmail,
   updatePassword as fbUpdatePassword,
   signOut as fbSignOut,
@@ -23,6 +25,7 @@ interface AuthCtx {
   configured: boolean;
   signUp: (email: string, password: string, displayName: string) => Promise<{ error: string | null }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  googleSignIn: () => Promise<{ error: string | null }>;
   forgotPassword: (email: string) => Promise<{ error: string | null }>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
@@ -90,6 +93,16 @@ function authError(code: string): string {
       return 'Please enter a valid email address';
     case 'auth/too-many-requests':
       return 'Too many attempts — please wait a moment and try again';
+    case 'auth/operation-not-allowed':
+      return 'Google sign-in is not enabled yet. Enable it once in the Firebase console.';
+    case 'auth/popup-closed-by-user':
+      return 'Sign-in was cancelled';
+    case 'auth/cancelled-popup-request':
+      return 'Sign-in was cancelled';
+    case 'auth/popup-blocked':
+      return 'Pop-up blocked — please allow pop-ups for this site and try again';
+    case 'auth/unauthorized-domain':
+      return 'This domain is not authorized for sign-in';
     default:
       return 'Something went wrong. Please try again.';
   }
@@ -153,6 +166,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const cred = await createUserWithEmailAndPassword(auth, email, password);
       await fbUpdateProfile(cred.user, { displayName });
       await ensureBootstrap(cred.user.uid, displayName);
+      return { error: null };
+    } catch (e) {
+      return { error: authError((e as { code?: string }).code ?? '') };
+    }
+  }, []);
+
+  const googleSignIn = useCallback(async () => {
+    try {
+      const cred = await signInWithPopup(auth, new GoogleAuthProvider());
+      try {
+        await ensureBootstrap(cred.user.uid, cred.user.displayName);
+      } catch {
+        // self-heal on next auth state change if this fails
+      }
       return { error: null };
     } catch (e) {
       return { error: authError((e as { code?: string }).code ?? '') };
@@ -226,7 +253,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <Ctx.Provider value={{ user, profile, loading, configured: isFirebaseConfigured, signUp, signIn, forgotPassword, changePassword, signOut, updateProfile }}>
+    <Ctx.Provider value={{ user, profile, loading, configured: isFirebaseConfigured, signUp, signIn, googleSignIn, forgotPassword, changePassword, signOut, updateProfile }}>
       {children}
     </Ctx.Provider>
   );
