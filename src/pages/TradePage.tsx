@@ -6,7 +6,7 @@ import { fmtPrice, fmtQty, fmtUSD } from '../lib/format';
 import { useMarket } from '../context/MarketContext';
 import { usePortfolio } from '../context/PortfolioContext';
 import { Badge, Button, Card, PageHeader } from '../components/ui';
-import { PriceChange } from '../components/market-bits';
+import { PriceChange, CoinTickerStrip } from '../components/market-bits';
 import PriceChart from '../components/charts/PriceChart';
 import type { Side } from '../types';
 
@@ -123,7 +123,7 @@ export default function TradePage() {
             <select
               value={symbol}
               onChange={(e) => selectSymbol(e.target.value)}
-              className="input h-10 w-full sm:w-64"
+              className="input h-10 w-full sm:w-64 sm:hidden"
             >
               {CRYPTO_ASSETS.map((a) => (
                 <option key={a.symbol} value={a.symbol}>
@@ -132,7 +132,17 @@ export default function TradePage() {
               ))}
             </select>
           </div>
-          <PriceChart symbol={symbol} kind="crypto" height={340} />
+
+          <CoinTickerStrip
+            symbols={CRYPTO_ASSETS.map((a) => a.symbol)}
+            selected={symbol}
+            onSelect={selectSymbol}
+            getQuote={getQuote}
+          />
+
+          <div className="mt-4">
+            <PriceChart symbol={symbol} kind="crypto" height={340} />
+          </div>
         </Card>
 
         {/* RIGHT: trading panel */}
