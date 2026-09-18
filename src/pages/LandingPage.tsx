@@ -74,15 +74,19 @@ export function LandingPage() {
         {/* Hero Section */}
         <section className="relative overflow-hidden py-20 lg:py-28">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
-            <div className="inline-flex items-center gap-2 rounded-full border border-line bg-panel px-3.5 py-1.5 text-xs font-semibold text-muted mb-6">
+            <div className="animate-fade-in inline-flex items-center gap-2 rounded-full border border-line bg-panel px-3.5 py-1.5 text-xs font-semibold text-muted mb-6">
               <Sparkles size={14} className="text-primary-500" />
               <span>Modern Crypto & Fiat Paper Trading</span>
             </div>
 
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight max-w-4xl mx-auto leading-tight">
+            <h1 className="brand-name animate-fade-in text-6xl sm:text-7xl lg:text-8xl font-extrabold tracking-tight leading-none mb-5" style={{ animationDelay: '0.1s' }}>
+              KRYPTOVA
+            </h1>
+
+            <h2 className="animate-fade-in text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight max-w-4xl mx-auto leading-tight" style={{ animationDelay: '0.2s' }}>
               Trade Smarter. Track Markets.{' '}
               <span className="text-primary-500">Take Control.</span>
-            </h1>
+            </h2>
 
             <p className="mt-6 text-base sm:text-lg text-muted max-w-2xl mx-auto leading-relaxed">
               Kryptova is a modern environment for monitoring crypto and currency markets and practicing trading with virtual funds. Master market mechanics without risking real capital.
