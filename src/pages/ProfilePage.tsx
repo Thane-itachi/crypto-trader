@@ -60,18 +60,12 @@ export default function ProfilePage() {
 
             <form onSubmit={handleSave} className="space-y-5">
               {/* Avatar: plus badge opens gallery / preset picker */}
-              <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
-                <AvatarPicker
-                  avatarUrl={profile?.avatar_url ?? null}
-                  displayName={displayName}
-                  email={user?.email}
-                  onSet={async (url) => updateProfile({ avatar_url: url })}
-                />
-                <p className="text-xs text-muted">
-                  Tap the <span className="font-semibold text-primary-400">+</span> to add a picture from your
-                  gallery or pick one of the built-in Crypto-Trader avatars. Changes save instantly.
-                </p>
-              </div>
+              <AvatarPicker
+                avatarUrl={profile?.avatar_url ?? null}
+                displayName={displayName}
+                email={user?.email}
+                onSet={async (url) => updateProfile({ avatar_url: url })}
+              />
 
               <div className="space-y-4">
                 <div>

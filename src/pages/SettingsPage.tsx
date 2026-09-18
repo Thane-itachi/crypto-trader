@@ -123,19 +123,13 @@ export default function SettingsPage() {
           <h3 className="mb-4 text-lg font-semibold tracking-tight flex items-center gap-2">
             <UserCircle size={18} /> Profile Picture
           </h3>
-          <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
-            <AvatarPicker
-              avatarUrl={profile?.avatar_url ?? null}
-              displayName={profile?.display_name}
-              email={user?.email}
-              sizeClass="h-16 w-16"
-              onSet={async (url) => updateProfile({ avatar_url: url })}
-            />
-            <p className="text-xs text-muted">
-              Shown in your profile and the top bar. Tap the <span className="font-semibold text-primary-400">+</span> to
-              add from your gallery or choose a built-in avatar.
-            </p>
-          </div>
+          <AvatarPicker
+            avatarUrl={profile?.avatar_url ?? null}
+            displayName={profile?.display_name}
+            email={user?.email}
+            sizeClass="h-16 w-16"
+            onSet={async (url) => updateProfile({ avatar_url: url })}
+          />
         </Card>
 
         {/* Notifications Card */}
