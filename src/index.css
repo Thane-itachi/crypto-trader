@@ -128,8 +128,13 @@ body {
   .animate-float {
     animation: none;
   }
-  .orbit-coin {
+  .orbit-coin,
+  .meteor-coin {
     display: none;
+  }
+  .brand-name-reveal {
+    animation: none;
+    opacity: 1;
   }
   .brand-name {
     background: none;
@@ -221,4 +226,97 @@ body {
   to {
     transform: rotate(360deg);
   }
+}
+
+/* ---- Entrance sequence: meteor coin drops in, name reveals, orbit begins ---- */
+.brand-stage {
+  position: relative;
+  display: inline-block;
+}
+.meteor-coin {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  font-size: 44px;
+  z-index: 5;
+  pointer-events: none;
+  animation: coin-drop 1.05s cubic-bezier(0.5, 0, 0.9, 0.6) forwards;
+}
+.meteor-coin::before {
+  /* falling streak */
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  width: 4px;
+  height: 110px;
+  transform: translateX(-50%);
+  background: linear-gradient(to top, rgba(247, 207, 90, 0.9), rgba(247, 207, 90, 0));
+  border-radius: 4px;
+  filter: blur(1.5px);
+}
+.meteor-coin::after {
+  /* impact flash */
+  content: '';
+  position: absolute;
+  inset: -12px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(247, 207, 90, 0.55), transparent 70%);
+  opacity: 0;
+  transform: scale(0.3);
+  animation: impact-flash 0.5s ease-out 0.95s forwards;
+}
+@keyframes coin-drop {
+  0% {
+    transform: translate(-50%, -50%) translateY(-60vh) rotate(0deg);
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) translateY(0) rotate(200deg);
+    opacity: 0;
+  }
+}
+@keyframes impact-flash {
+  0% {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+.brand-name-reveal {
+  animation: name-reveal 0.8s cubic-bezier(0.2, 0.7, 0.3, 1) 0.7s both;
+}
+@keyframes name-reveal {
+  0% {
+    opacity: 0;
+    transform: scale(0.9) translateY(6px);
+  }
+  55% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+/* the ring coin waits for the meteor to land */
+.brand-stage .orbit-coin {
+  animation-delay: 1.15s;
+  animation-fill-mode: backwards;
+  left: 50%;
+  top: 135%;
 }

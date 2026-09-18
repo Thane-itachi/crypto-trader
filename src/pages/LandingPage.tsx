@@ -79,10 +79,13 @@ export function LandingPage() {
               <span>Modern Crypto & Fiat Paper Trading</span>
             </div>
 
-            <h1 className="brand-name brand-hero animate-fade-in text-6xl sm:text-7xl lg:text-8xl font-extrabold tracking-tight leading-none mb-5" style={{ animationDelay: '0.1s' }}>
-              KRYPTOVA
-              <span className="orbit-coin" aria-hidden="true"><span className="orbit-coin-face">K</span></span>
-            </h1>
+            <div className="brand-stage mb-5">
+              <span className="meteor-coin" aria-hidden="true"><span className="orbit-coin-face">K</span></span>
+              <h1 className="brand-name brand-hero brand-name-reveal text-6xl sm:text-7xl lg:text-8xl font-extrabold tracking-tight leading-none">
+                KRYPTOVA
+                <span className="orbit-coin" aria-hidden="true"><span className="orbit-coin-face">K</span></span>
+              </h1>
+            </div>
 
             <h2 className="animate-fade-in text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight max-w-4xl mx-auto leading-tight" style={{ animationDelay: '0.2s' }}>
               Trade Smarter. Track Markets.{' '}
