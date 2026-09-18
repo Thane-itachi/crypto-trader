@@ -1,13 +1,21 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
+  EmailAuthProvider,
+  GoogleAuthProvider,
+  RecaptchaVerifier,
+  signInWithPhoneNumber,
+  reauthenticateWithCredential,
   signInWithEmailAndPassword,
+  signInWithPopup,
+  sendPasswordResetEmail,
+  updatePassword as fbUpdatePassword,
   signOut as fbSignOut,
   updateProfile as fbUpdateProfile,
 } from 'firebase/auth';
-import type { User } from 'firebase/auth';
+import type { ConfirmationResult, User } from 'firebase/auth';
 import { doc, getDoc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db, isFirebaseConfigured } from '../lib/firebase';
 import type { Profile } from '../types';
@@ -19,6 +27,11 @@ interface AuthCtx {
   configured: boolean;
   signUp: (email: string, password: string, displayName: string) => Promise<{ error: string | null }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  googleSignIn: () => Promise<{ error: string | null }>;
+  sendPhoneCode: (phoneE164: string) => Promise<{ error: string | null }>;
+  confirmPhoneCode: (code: string, displayName: string) => Promise<{ error: string | null }>;
+  forgotPassword: (email: string) => Promise<{ error: string | null }>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   updateProfile: (fields: Partial<Profile>) => Promise<{ error: string | null }>;
 }
@@ -84,6 +97,28 @@ function authError(code: string): string {
       return 'Please enter a valid email address';
     case 'auth/too-many-requests':
       return 'Too many attempts — please wait a moment and try again';
+    case 'auth/operation-not-allowed':
+      return 'Google sign-in is not enabled yet. Enable it once in the Firebase console.';
+    case 'auth/popup-closed-by-user':
+      return 'Sign-in was cancelled';
+    case 'auth/cancelled-popup-request':
+      return 'Sign-in was cancelled';
+    case 'auth/popup-blocked':
+      return 'Pop-up blocked — please allow pop-ups for this site and try again';
+    case 'auth/unauthorized-domain':
+      return 'This domain is not authorized for sign-in';
+    case 'auth/invalid-phone-number':
+      return 'Please enter a valid phone number';
+    case 'auth/invalid-verification-code':
+      return 'That code is incorrect — check the SMS and try again';
+    case 'auth/code-expired':
+      return 'That code has expired — request a new one';
+    case 'auth/missing-verification-code':
+      return 'Please enter the code from the SMS';
+    case 'auth/captcha-check-failed':
+      return 'Human verification failed — please try again';
+    case 'auth/quota-exceeded':
+      return 'SMS quota reached — please try again later';
     default:
       return 'Something went wrong. Please try again.';
   }
@@ -153,6 +188,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const confirmationRef = useRef<ConfirmationResult | null>(null);
+  const recaptchaRef = useRef<RecaptchaVerifier | null>(null);
+
+  const sendPhoneCode = useCallback(async (phoneE164: string) => {
+    try {
+      if (!recaptchaRef.current) {
+        recaptchaRef.current = new RecaptchaVerifier(auth, 'phone-recaptcha', { size: 'invisible' });
+      }
+      confirmationRef.current = await signInWithPhoneNumber(auth, phoneE164, recaptchaRef.current);
+      return { error: null };
+    } catch (e) {
+      return { error: authError((e as { code?: string }).code ?? '') };
+    }
+  }, []);
+
+  const confirmPhoneCode = useCallback(async (code: string, displayName: string) => {
+    try {
+      if (!confirmationRef.current) return { error: 'Please request a code first' };
+      const cred = await confirmationRef.current.confirm(code);
+      if (displayName) {
+        try {
+          await fbUpdateProfile(cred.user, { displayName });
+        } catch {
+          // non-fatal
+        }
+      }
+      try {
+        await ensureBootstrap(cred.user.uid, displayName);
+      } catch {
+        // self-heal on next auth state change
+      }
+      return { error: null };
+    } catch (e) {
+      return { error: authError((e as { code?: string }).code ?? '') };
+    }
+  }, []);
+
+  const googleSignIn = useCallback(async () => {
+    try {
+      const cred = await signInWithPopup(auth, new GoogleAuthProvider());
+      try {
+        await ensureBootstrap(cred.user.uid, cred.user.displayName);
+      } catch {
+        // self-heal on next auth state change if this fails
+      }
+      return { error: null };
+    } catch (e) {
+      return { error: authError((e as { code?: string }).code ?? '') };
+    }
+  }, []);
+
   const signIn = useCallback(async (email: string, password: string) => {
     try {
       const cred = await signInWithEmailAndPassword(auth, email, password);
@@ -166,6 +252,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: authError((e as { code?: string }).code ?? '') };
     }
   }, []);
+
+  const forgotPassword = useCallback(async (email: string) => {
+    try {
+      await sendPasswordResetEmail(auth, email);
+      // Never reveal whether the account exists; same message either way.
+      return { error: null };
+    } catch (e) {
+      const code = (e as { code?: string }).code ?? '';
+      if (code === 'auth/invalid-email') return { error: 'That email address looks invalid.' };
+      if (code === 'auth/too-many-requests') return { error: 'Too many attempts. Please try again in a few minutes.' };
+      return { error: 'Could not send the reset email. Please try again.' };
+    }
+  }, []);
+
+  const changePassword = useCallback(
+    async (currentPassword: string, newPassword: string) => {
+      if (!user || !user.email) return { error: 'Not signed in' };
+      try {
+        // changing a password requires recent authentication
+        await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, currentPassword));
+        await fbUpdatePassword(user, newPassword);
+        return { error: null };
+      } catch (e) {
+        const code = (e as { code?: string }).code ?? '';
+        if (code === 'auth/wrong-password' || code === 'auth/invalid-credential' || code === 'auth/user-not-found') {
+          return { error: 'Your current password is incorrect' };
+        }
+        if (code === 'auth/weak-password') return { error: 'New password must be at least 6 characters' };
+        if (code === 'auth/too-many-requests') return { error: 'Too many attempts — please wait a moment and try again' };
+        return { error: 'Could not change your password. Please try again.' };
+      }
+    },
+    [user],
+  );
 
   const signOut = useCallback(async () => {
     await fbSignOut(auth);
@@ -186,7 +306,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <Ctx.Provider value={{ user, profile, loading, configured: isFirebaseConfigured, signUp, signIn, signOut, updateProfile }}>
+    <Ctx.Provider value={{ user, profile, loading, configured: isFirebaseConfigured, signUp, signIn, googleSignIn, sendPhoneCode, confirmPhoneCode, forgotPassword, changePassword, signOut, updateProfile }}>
       {children}
     </Ctx.Provider>
   );

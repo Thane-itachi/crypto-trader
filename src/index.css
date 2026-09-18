@@ -9,19 +9,20 @@
   --line: 228 228 231;
   --txt: 24 24 27;
   --muted: 113 113 122;
-  --up: 5 150 105;
+  --up: 16 185 129;
   --down: 225 29 72;
 }
 
 .dark {
-  --bg: 8 11 15;
-  --surface: 15 20 26;
-  --panel: 22 28 36;
-  --line: 39 48 58;
-  --txt: 226 232 236;
-  --muted: 125 137 148;
-  --up: 52 211 153;
-  --down: 251 113 133;
+  /* 60-30-10 trading palette: base #0B0E14, structural #151D2A/#94A3B8, accents below */
+  --bg: 11 14 20;
+  --surface: 21 29 42;
+  --panel: 27 36 50;
+  --line: 42 52 66;
+  --txt: 248 250 252;
+  --muted: 148 163 184;
+  --up: 16 185 129;
+  --down: 244 63 94;
 }
 
 html {
@@ -51,4 +52,286 @@ body {
   .label {
     @apply mb-1.5 block text-xs font-medium uppercase tracking-wide text-muted;
   }
+}
+
+/* ---- Brand name shimmer (KRYPTOVA wordmark) ---- */
+.brand-name {
+  background-image: linear-gradient(
+    110deg,
+    rgb(var(--txt)) 25%,
+    #2dd4bf 45%,
+    #14b8a6 52%,
+    rgb(var(--txt)) 72%
+  );
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: brand-shine 4.5s ease-in-out infinite;
+}
+@keyframes brand-shine {
+  0%,
+  100% {
+    background-position: 120% 0;
+  }
+  50% {
+    background-position: -20% 0;
+  }
+}
+
+/* ---- Login entrance animations ---- */
+.animate-card-in {
+  animation: card-in 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(22px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.5s ease-out both;
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-float {
+  animation: float-y 3.2s ease-in-out infinite;
+}
+@keyframes float-y {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+@keyframes ticker-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.ticker-track {
+  display: flex;
+  width: max-content;
+  animation: ticker-scroll 45s linear infinite;
+}
+.ticker-track:hover {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-name,
+  .animate-card-in,
+  .animate-fade-in,
+  .animate-float,
+  .ticker-track {
+    animation: none;
+  }
+  .orbit-coin,
+  .meteor-coin {
+    display: none;
+  }
+  .brand-name-reveal {
+    animation: none;
+    opacity: 1;
+  }
+  .brand-name {
+    background: none;
+    -webkit-text-fill-color: unset;
+  }
+}
+
+/* ---- Orbiting coin (planetary ring around the big KRYPTOVA wordmark) ---- */
+.brand-hero {
+  position: relative;
+  display: inline-block;
+  isolation: isolate;
+}
+.orbit-coin {
+  position: absolute;
+  width: 0.52em;
+  height: 0.52em;
+  transform: translate(-50%, -50%);
+  animation: coin-orbit 5.5s linear infinite;
+  pointer-events: none;
+  z-index: 3;
+}
+@keyframes coin-orbit {
+  0% {
+    left: 50%;
+    top: 135%;
+    z-index: 3;
+  }
+  12.5% {
+    left: 96%;
+    top: 110%;
+    z-index: 3;
+  }
+  25% {
+    left: 115%;
+    top: 50%;
+    z-index: -1;
+  }
+  37.5% {
+    left: 96%;
+    top: -10%;
+    z-index: -1;
+  }
+  50% {
+    left: 50%;
+    top: -35%;
+    z-index: -1;
+  }
+  62.5% {
+    left: 4%;
+    top: -10%;
+    z-index: -1;
+  }
+  75% {
+    left: -15%;
+    top: 50%;
+    z-index: 3;
+  }
+  87.5% {
+    left: 4%;
+    top: 110%;
+    z-index: 3;
+  }
+  100% {
+    left: 50%;
+    top: 135%;
+    z-index: 3;
+  }
+}
+.orbit-coin-face {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.3em;
+  font-weight: 800;
+  color: #7a5b0e;
+  -webkit-text-fill-color: #7a5b0e;
+  background: radial-gradient(circle at 35% 30%, #ffefb8 0%, #f7cf5a 45%, #c8940f 100%);
+  box-shadow:
+    inset 0 -0.06em 0.12em rgba(90, 60, 0, 0.45),
+    inset 0 0.05em 0.08em rgba(255, 255, 255, 0.55),
+    0 0 0.45em rgba(247, 207, 90, 0.35);
+  animation: coin-spin 1.6s linear infinite;
+}
+@keyframes coin-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---- Entrance sequence: meteor coin drops in, name reveals, orbit begins ---- */
+.brand-stage {
+  position: relative;
+  display: inline-block;
+}
+.meteor-coin {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  font-size: 44px;
+  z-index: 5;
+  pointer-events: none;
+  animation: coin-drop 1.05s cubic-bezier(0.5, 0, 0.9, 0.6) forwards;
+}
+.meteor-coin::before {
+  /* falling streak */
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  width: 4px;
+  height: 110px;
+  transform: translateX(-50%);
+  background: linear-gradient(to top, rgba(247, 207, 90, 0.9), rgba(247, 207, 90, 0));
+  border-radius: 4px;
+  filter: blur(1.5px);
+}
+.meteor-coin::after {
+  /* impact flash */
+  content: '';
+  position: absolute;
+  inset: -12px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(247, 207, 90, 0.55), transparent 70%);
+  opacity: 0;
+  transform: scale(0.3);
+  animation: impact-flash 0.5s ease-out 0.95s forwards;
+}
+@keyframes coin-drop {
+  0% {
+    transform: translate(-50%, -50%) translateY(-60vh) rotate(0deg);
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) translateY(0) rotate(200deg);
+    opacity: 0;
+  }
+}
+@keyframes impact-flash {
+  0% {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+.brand-name-reveal {
+  animation: name-reveal 0.8s cubic-bezier(0.2, 0.7, 0.3, 1) 0.7s both;
+}
+@keyframes name-reveal {
+  0% {
+    opacity: 0;
+    transform: scale(0.9) translateY(6px);
+  }
+  55% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+/* the ring coin waits for the meteor to land */
+.brand-stage .orbit-coin {
+  animation-delay: 1.15s;
+  animation-fill-mode: backwards;
+  left: 50%;
+  top: 135%;
 }

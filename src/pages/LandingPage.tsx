@@ -74,18 +74,26 @@ export function LandingPage() {
         {/* Hero Section */}
         <section className="relative overflow-hidden py-20 lg:py-28">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
-            <div className="inline-flex items-center gap-2 rounded-full border border-line bg-panel px-3.5 py-1.5 text-xs font-semibold text-muted mb-6">
+            <div className="animate-fade-in inline-flex items-center gap-2 rounded-full border border-line bg-panel px-3.5 py-1.5 text-xs font-semibold text-muted mb-6">
               <Sparkles size={14} className="text-primary-500" />
               <span>Modern Crypto & Fiat Paper Trading</span>
             </div>
 
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight max-w-4xl mx-auto leading-tight">
+            <div className="brand-stage mb-5">
+              <span className="meteor-coin" aria-hidden="true"><span className="orbit-coin-face">K</span></span>
+              <h1 className="brand-name brand-hero brand-name-reveal text-6xl sm:text-7xl lg:text-8xl font-extrabold tracking-tight leading-none">
+                KRYPTOVA
+                <span className="orbit-coin" aria-hidden="true"><span className="orbit-coin-face">K</span></span>
+              </h1>
+            </div>
+
+            <h2 className="animate-fade-in text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight max-w-4xl mx-auto leading-tight" style={{ animationDelay: '0.2s' }}>
               Trade Smarter. Track Markets.{' '}
               <span className="text-primary-500">Take Control.</span>
-            </h1>
+            </h2>
 
             <p className="mt-6 text-base sm:text-lg text-muted max-w-2xl mx-auto leading-relaxed">
-              Crypto-Trader is a modern environment for monitoring crypto and currency markets and practicing trading with virtual funds. Master market mechanics without risking real capital.
+              Kryptova is a modern environment for monitoring crypto and currency markets and practicing trading with virtual funds. Master market mechanics without risking real capital.
             </p>
 
             <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
@@ -223,7 +231,7 @@ export function LandingPage() {
                   Built for Safe Learning & Market Exploration
                 </h2>
                 <p className="text-muted leading-relaxed text-sm sm:text-base">
-                  Crypto-Trader is designed strictly for educational paper trading and market observation. You can experiment with trading concepts in a realistic interface without exposing capital to financial risk.
+                  Kryptova is designed strictly for educational paper trading and market observation. You can experiment with trading concepts in a realistic interface without exposing capital to financial risk.
                 </p>
 
                 <div className="space-y-4 pt-2">
@@ -265,7 +273,7 @@ export function LandingPage() {
                     <CandlestickChart size={22} />
                   </div>
                   <div>
-                    <p className="font-bold text-base">Crypto-Trader Simulation Engine</p>
+                    <p className="font-bold text-base">Kryptova Simulation Engine</p>
                     <p className="text-xs text-muted">Educational Platform Overview</p>
                   </div>
                 </div>
@@ -308,7 +316,7 @@ export function LandingPage() {
               <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-600 text-white">
                 <CandlestickChart size={18} />
               </div>
-              <span className="text-sm font-extrabold tracking-wider">CRYPTO-TRADER</span>
+              <span className="brand-name text-sm font-extrabold tracking-wider">KRYPTOVA</span>
             </Link>
 
             <div className="flex flex-wrap items-center gap-6 text-sm text-muted">
@@ -328,7 +336,9 @@ export function LandingPage() {
             <p>
               <strong>Disclaimer:</strong> Paper trading only. No real-money transactions. Not financial advice. Crypto assets are volatile.
             </p>
-            <p>© {new Date().getFullYear()} Crypto-Trader. All rights reserved. Built for educational market simulation.</p>
+            <p>
+              © {new Date().getFullYear()} Kryptova. All rights reserved. Founded by Jedidiah. Built for educational market simulation.
+            </p>
           </div>
         </div>
       </footer>

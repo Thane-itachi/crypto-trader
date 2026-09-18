@@ -227,7 +227,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       created_at: FieldValue.serverTimestamp(),
     });
 
-    res.status(200).json({ ok: true, message: result.message });
+    // txn returned so the client can attach TP/SL to the exact executed quantity
+    res.status(200).json({ ok: true, message: result.message, txn: result.txn });
   } catch (e) {
     res.status(500).json({ ok: false, message: 'Trade engine error — please try again.' });
   }

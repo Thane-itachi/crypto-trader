@@ -53,6 +53,20 @@ export interface Txn {
   price: number;
   total: number;
   status: 'completed' | 'failed';
+  reason?: 'manual' | 'take_profit' | 'stop_loss';
+}
+
+/** A Take-Profit / Stop-Loss order. Executed server-side by /api/orders. */
+export interface TPOrder {
+  id: string;
+  symbol: string;
+  kind: 'tp' | 'sl';
+  trigger_price: number;
+  quantity: number;
+  status: 'active' | 'executed' | 'cancelled';
+  created_at: string;
+  executed_price?: number;
+  executed_total?: number;
 }
 
 export interface Profile {
@@ -64,9 +78,18 @@ export interface Profile {
   notif_market: boolean;
 }
 
+export interface ExecutedTxn {
+  symbol: string;
+  side: Side;
+  quantity: number;
+  price: number;
+  total: number;
+}
+
 export interface TradeResult {
   ok: boolean;
   message: string;
+  txn?: ExecutedTxn;
 }
 
 export type TradeAmountType = 'usd' | 'qty';

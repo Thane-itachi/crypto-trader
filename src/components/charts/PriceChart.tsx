@@ -110,7 +110,7 @@ export default function PriceChart({ symbol, kind, height = 320, showRanges = tr
 
   const changeSrc = candles && candles.length > 1 ? candles.map((c) => ({ p: c.c })) : points;
   const positive = changeSrc && changeSrc.length > 1 ? changeSrc[changeSrc.length - 1].p >= changeSrc[0].p : true;
-  const color = positive ? 'rgb(52 211 153)' : 'rgb(251 113 133)';
+  const color = positive ? 'rgb(16 185 129)' : 'rgb(244 63 94)';
 
   const change = changeSrc && changeSrc.length > 1 ? ((changeSrc[changeSrc.length - 1].p - changeSrc[0].p) / changeSrc[0].p) * 100 : null;
 
@@ -206,7 +206,7 @@ export default function PriceChart({ symbol, kind, height = 320, showRanges = tr
           <KagiChart key={`${symbol}-${kagiRev}`} candles={candles} height={height - 24} reversalPct={kagiRev} />
         )}
         {!loading && !error && points && (mode === 'line' || !candles || candles.length === 0) && (
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" className="[mask-image:linear-gradient(to_right,transparent,black_24px,black)]">
             <AreaChart data={points} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
               <defs>
                 <linearGradient id={`grad-${symbol}`} x1="0" y1="0" x2="0" y2="1">
@@ -237,7 +237,7 @@ export default function PriceChart({ symbol, kind, height = 320, showRanges = tr
               <Tooltip
                 content={({ active, payload }) =>
                   active && payload && payload.length ? (
-                    <div className="rounded-lg border border-line bg-surface px-3 py-2 text-xs shadow-lg">
+                    <div className="rounded-lg border border-line bg-panel px-3 py-2 text-xs shadow-lg">
                       <p className="text-muted">{new Date(payload[0].payload.t).toLocaleString('en-US')}</p>
                       <p className="font-mono font-bold">
                         ${Number(payload[0].payload.p).toLocaleString('en-US', { maximumFractionDigits: 6 })}

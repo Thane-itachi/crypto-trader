@@ -1,7 +1,7 @@
-// Crypto-Trader service worker — app-shell caching for installability.
+// Kryptova service worker — app-shell caching for installability.
 // Static assets (Vite hashed bundles, icons) are cached at runtime;
 // everything else (market data, auth) always goes to the network.
-const CACHE = 'ct-shell-v1';
+const CACHE = 'kryptova-shell-v1';
 const SHELL = [/\/assets\//, /\/icons\//, /\/manifest\.webmanifest$/];
 
 self.addEventListener('install', () => self.skipWaiting());

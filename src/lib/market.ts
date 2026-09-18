@@ -70,62 +70,67 @@ function demoFiatQuotes(tick: number): Quote[] {
 // Live providers
 // ---------------------------------------------------------------------------
 
-interface CGMarket {
-  id: string;
-  current_price: number;
-  price_change_percentage_24h: number | null;
-  high_24h: number | null;
-  low_24h: number | null;
-  total_volume: number | null;
-  market_cap: number | null;
+// ---------------------------------------------------------------------------
+// Live quotes: fetched from OUR OWN /api/quotes, not CoinGecko/FX directly.
+//
+// Direct browser -> CoinGecko calls used to mean every open tab, from every
+// visitor, polled the public (unauthenticated) CoinGecko API independently.
+// That tier rate-limits hard — a handful of requests within a few seconds is
+// enough to start getting HTTP 429 — so any real traffic tripped the demo
+// fallback constantly. /api/quotes centralizes the upstream calls server
+// side with a shared cache, so CoinGecko/FX are hit once per ~20s TOTAL
+// regardless of how many users are online, and it keeps serving real
+// (Firestore-cached) prices across brief upstream hiccups instead of falling
+// straight to synthetic demo data.
+// ---------------------------------------------------------------------------
+
+interface QuoteDTO {
+  symbol: string;
+  price: number;
+  change24h: number | null;
+  high24h: number | null;
+  low24h: number | null;
+  volume24h: number | null;
+  marketCap: number | null;
 }
 
-async function liveCryptoQuotes(): Promise<Quote[]> {
-  const ids = CRYPTO_ASSETS.map((a) => a.id).join(',');
-  const res = await fetch(
-    `${COINGECKO}/coins/markets?vs_currency=usd&ids=${ids}&sparkline=false&price_change_percentage=24h`,
-  );
-  if (!res.ok) throw Object.assign(new Error(`CoinGecko ${res.status}`), { status: res.status });
-  const data: CGMarket[] = await res.json();
-  if (!Array.isArray(data) || data.length === 0) throw new Error('empty response');
-  const byId = new Map(data.map((d) => [d.id, d]));
-  return CRYPTO_ASSETS.filter((a) => byId.has(a.id)).map((a) => {
-    const d = byId.get(a.id)!;
-    return {
-      symbol: a.symbol,
-      name: a.name,
-      kind: a.kind,
-      price: d.current_price,
-      change24h: d.price_change_percentage_24h,
-      high24h: d.high_24h,
-      low24h: d.low_24h,
-      volume24h: d.total_volume,
-      marketCap: d.market_cap,
-      updatedAt: Date.now(),
-      isDemo: false,
-    };
-  });
+interface QuotesApiResponse {
+  crypto: { live: boolean; quotes: QuoteDTO[] | null; updatedAt: number };
+  fiat: { live: boolean; quotes: QuoteDTO[] | null; updatedAt: number };
 }
 
-async function liveFiatQuotes(): Promise<Quote[]> {
-  const res = await fetch(FX_API);
-  if (!res.ok) throw Object.assign(new Error(`FX ${res.status}`), { status: res.status });
-  const data = await res.json();
-  const rates: Record<string, number> = data?.rates;
-  if (!rates || !rates.EUR) throw new Error('bad FX payload');
-  return FIAT_ASSETS.map((a) => ({
+async function fetchQuotesApi(): Promise<QuotesApiResponse> {
+  const res = await fetch('/api/quotes');
+  if (!res.ok) throw Object.assign(new Error(`quotes api ${res.status}`), { status: res.status });
+  return res.json();
+}
+
+function toQuote(a: { symbol: string; name: string; kind: 'crypto' | 'fiat' }, d: QuoteDTO, updatedAt: number): Quote {
+  return {
     symbol: a.symbol,
     name: a.name,
     kind: a.kind,
-    price: a.symbol === 'USD' ? 1 : 1 / (rates[a.symbol] ?? 0),
-    change24h: a.symbol === 'USD' ? 0 : null,
-    high24h: null,
-    low24h: null,
-    volume24h: null,
-    marketCap: null,
-    updatedAt: (data.time_last_update_unix ?? Date.now() / 1000) * 1000,
+    price: d.price,
+    change24h: d.change24h,
+    high24h: d.high24h,
+    low24h: d.low24h,
+    volume24h: d.volume24h,
+    marketCap: d.marketCap,
+    updatedAt,
     isDemo: false,
-  }));
+  };
+}
+
+function mapCryptoQuotes(res: QuotesApiResponse): Quote[] {
+  if (!res.crypto.live || !res.crypto.quotes) throw new Error('crypto quotes unavailable');
+  const bySymbol = new Map(res.crypto.quotes.map((q) => [q.symbol, q]));
+  return CRYPTO_ASSETS.filter((a) => bySymbol.has(a.symbol)).map((a) => toQuote(a, bySymbol.get(a.symbol)!, res.crypto.updatedAt));
+}
+
+function mapFiatQuotes(res: QuotesApiResponse): Quote[] {
+  if (!res.fiat.live || !res.fiat.quotes) throw new Error('fiat quotes unavailable');
+  const bySymbol = new Map(res.fiat.quotes.map((q) => [q.symbol, q]));
+  return FIAT_ASSETS.filter((a) => bySymbol.has(a.symbol)).map((a) => toQuote(a, bySymbol.get(a.symbol)!, res.fiat.updatedAt));
 }
 
 // ---------------------------------------------------------------------------
@@ -136,7 +141,7 @@ async function liveFiatQuotes(): Promise<Quote[]> {
 // resets the penalty. During backoff the demo fallback serves immediately,
 // so a rate-limited API is never hammered in a retry loop.
 
-const backoff: Record<'crypto' | 'fx', number> = { crypto: 0, fx: 0 };
+const backoff: Record<'crypto' | 'fx', number> = { crypto: 0, fx: 0 }; // 'crypto' key also covers the combined /api/quotes call
 const backoffMisses: Record<'crypto' | 'fx', number> = { crypto: 0, fx: 0 };
 const BACKOFF_BASE_MS = 60_000;
 const BACKOFF_MAX_MS = 15 * 60_000;
@@ -232,24 +237,35 @@ let snapshotInFlight: Promise<MarketSnapshot> | null = null;
 export function fetchMarketSnapshot(tick: number): Promise<MarketSnapshot> {
   if (snapshotInFlight) return snapshotInFlight; // single-flight: concurrent callers share one request
   snapshotInFlight = (async () => {
-    const [crypto, fiat] = await Promise.allSettled([
-      livePaused('crypto') ? Promise.reject(new Error('rate-limit backoff')) : liveCryptoQuotes(),
-      livePaused('fx') ? Promise.reject(new Error('rate-limit backoff')) : liveFiatQuotes(),
-    ]);
-    if (crypto.status === 'fulfilled') noteSuccess('crypto');
-    else noteFailure('crypto');
-    if (fiat.status === 'fulfilled') noteSuccess('fx');
-    else noteFailure('fx');
-    const cryptoLive = crypto.status === 'fulfilled';
-    const fiatLive = fiat.status === 'fulfilled';
-    return {
-      quotes: [
-        ...(cryptoLive ? crypto.value : demoCryptoQuotes(tick)),
-        ...(fiatLive ? fiat.value : demoFiatQuotes(tick)),
-      ],
-      cryptoLive,
-      fiatLive,
-    };
+    // One request to OUR api covers both crypto + fiat (see fetchQuotesApi
+    // comment above) — only its own reachability needs client-side backoff.
+    if (livePaused('crypto')) {
+      return { quotes: [...demoCryptoQuotes(tick), ...demoFiatQuotes(tick)], cryptoLive: false, fiatLive: false };
+    }
+    try {
+      const apiRes = await fetchQuotesApi();
+      noteSuccess('crypto');
+      let cryptoQuotes: Quote[];
+      let fiatQuotes: Quote[];
+      let cryptoLive = true;
+      let fiatLive = true;
+      try {
+        cryptoQuotes = mapCryptoQuotes(apiRes);
+      } catch {
+        cryptoQuotes = demoCryptoQuotes(tick);
+        cryptoLive = false;
+      }
+      try {
+        fiatQuotes = mapFiatQuotes(apiRes);
+      } catch {
+        fiatQuotes = demoFiatQuotes(tick);
+        fiatLive = false;
+      }
+      return { quotes: [...cryptoQuotes, ...fiatQuotes], cryptoLive, fiatLive };
+    } catch {
+      noteFailure('crypto');
+      return { quotes: [...demoCryptoQuotes(tick), ...demoFiatQuotes(tick)], cryptoLive: false, fiatLive: false };
+    }
   })().finally(() => {
     snapshotInFlight = null;
   });

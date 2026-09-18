@@ -4,6 +4,7 @@ import { LogOut, Save, User as UserIcon, Shield, CheckCircle2 } from 'lucide-rea
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationsContext';
 import { Button, Card, PageHeader, Badge } from '../components/ui';
+import AvatarPicker from '../components/AvatarPicker';
 
 export default function ProfilePage() {
   const { user, profile, updateProfile, signOut } = useAuth();
@@ -11,16 +12,12 @@ export default function ProfilePage() {
   const navigate = useNavigate();
 
   const [displayName, setDisplayName] = useState(profile?.display_name ?? '');
-  const [avatarUrl, setAvatarUrl] = useState(profile?.avatar_url ?? '');
   const [saving, setSaving] = useState(false);
-  const [imgError, setImgError] = useState(false);
   const [signOutLoading, setSignOutLoading] = useState(false);
 
   useEffect(() => {
     if (profile) {
       setDisplayName(profile.display_name ?? '');
-      setAvatarUrl(profile.avatar_url ?? '');
-      setImgError(false);
     }
   }, [profile]);
 
@@ -30,7 +27,6 @@ export default function ProfilePage() {
 
     const { error } = await updateProfile({
       display_name: displayName.trim() || null,
-      avatar_url: avatarUrl.trim() || null,
     });
 
     setSaving(false);
@@ -48,7 +44,6 @@ export default function ProfilePage() {
     navigate('/');
   };
 
-  const initial = (displayName.trim() || user?.email || 'U')[0].toUpperCase();
 
   return (
     <div className="space-y-6">
@@ -64,41 +59,13 @@ export default function ProfilePage() {
             <h2 className="mb-4 text-lg font-semibold tracking-tight">Personal Details</h2>
 
             <form onSubmit={handleSave} className="space-y-5">
-              {/* Avatar Preview & URL */}
-              <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
-                <div className="relative shrink-0">
-                  {avatarUrl && !imgError ? (
-                    <img
-                      src={avatarUrl}
-                      alt={displayName || 'Avatar'}
-                      onError={() => setImgError(true)}
-                      className="h-20 w-20 rounded-full border-2 border-primary-500/30 object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary-600 text-2xl font-bold text-txt">
-                      {initial}
-                    </div>
-                  )}
-                </div>
-
-                <div className="w-full space-y-1">
-                  <label htmlFor="avatarUrl" className="label">
-                    Avatar Image URL
-                  </label>
-                  <input
-                    id="avatarUrl"
-                    type="url"
-                    value={avatarUrl}
-                    onChange={(e) => {
-                      setAvatarUrl(e.target.value);
-                      setImgError(false);
-                    }}
-                    placeholder="https://example.com/avatar.jpg"
-                    className="input"
-                  />
-                  <p className="text-xs text-muted">Direct link to an avatar image (JPEG, PNG, WebP)</p>
-                </div>
-              </div>
+              {/* Avatar: plus badge opens gallery / preset picker */}
+              <AvatarPicker
+                avatarUrl={profile?.avatar_url ?? null}
+                displayName={displayName}
+                email={user?.email}
+                onSet={async (url) => updateProfile({ avatar_url: url })}
+              />
 
               <div className="space-y-4">
                 <div>

@@ -60,6 +60,14 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      <div className="brand-stage">
+        <span className="meteor-coin" aria-hidden="true"><span className="orbit-coin-face">K</span></span>
+        <div className="brand-name brand-hero brand-name-reveal text-5xl sm:text-6xl font-extrabold tracking-tight leading-none">
+          KRYPTOVA
+          <span className="orbit-coin" aria-hidden="true"><span className="orbit-coin-face">K</span></span>
+        </div>
+      </div>
+
       <PageHeader
         title="Dashboard"
         subtitle={`Welcome back, ${greetingName}! Here is your paper trading overview.`}

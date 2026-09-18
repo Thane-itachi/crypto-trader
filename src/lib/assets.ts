@@ -34,6 +34,26 @@ export const FIAT_ASSETS: AssetDef[] = FIAT_CODES.map((code) => ({
 
 export const ALL_ASSETS: AssetDef[] = [...CRYPTO_ASSETS, ...FIAT_ASSETS];
 
+export const ASSET_ICON: Record<string, { bg: string; glyph: string }> = {
+  BTC: { bg: 'linear-gradient(135deg,#f7931a,#c9701a)', glyph: '₿' },
+  ETH: { bg: 'linear-gradient(135deg,#8a94ff,#5f6bd8)', glyph: 'Φ' },
+  SOL: { bg: 'linear-gradient(135deg,#14f195,#9945ff)', glyph: 'S' },
+  XRP: { bg: 'linear-gradient(135deg,#3a3f47,#12141a)', glyph: 'X' },
+  BNB: { bg: 'linear-gradient(135deg,#f3ba2f,#b8860b)', glyph: 'B' },
+  ADA: { bg: 'linear-gradient(135deg,#2e5cf0,#1533a8)', glyph: 'A' },
+  DOGE: { bg: 'linear-gradient(135deg,#f0c419,#c79a10)', glyph: 'Đ' },
+  USDT: { bg: 'linear-gradient(135deg,#26a17b,#137a57)', glyph: 'T' },
+  USDC: { bg: 'linear-gradient(135deg,#2775ca,#1a5aa0)', glyph: '$' },
+  USD: { bg: 'linear-gradient(135deg,#4c8c4a,#2e5f2c)', glyph: '$' },
+  EUR: { bg: 'linear-gradient(135deg,#2f5fc7,#1c3d8a)', glyph: '€' },
+  GBP: { bg: 'linear-gradient(135deg,#7a3fc7,#4f2a8a)', glyph: '£' },
+  NGN: { bg: 'linear-gradient(135deg,#2e9e4e,#1c6a33)', glyph: '₦' },
+  JPY: { bg: 'linear-gradient(135deg,#d94b4b,#a12f2f)', glyph: '¥' },
+  CAD: { bg: 'linear-gradient(135deg,#c73f3f,#8a2a2a)', glyph: '$' },
+  AUD: { bg: 'linear-gradient(135deg,#2f9bc7,#1c6a8a)', glyph: '$' },
+  CHF: { bg: 'linear-gradient(135deg,#c73f3f,#8a2a2a)', glyph: '₣' },
+};
+
 export function findAsset(symbol: string): AssetDef | undefined {
   return ALL_ASSETS.find((a) => a.symbol.toUpperCase() === symbol.toUpperCase());
 }
