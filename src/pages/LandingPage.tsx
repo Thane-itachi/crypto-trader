@@ -336,7 +336,9 @@ export function LandingPage() {
             <p>
               <strong>Disclaimer:</strong> Paper trading only. No real-money transactions. Not financial advice. Crypto assets are volatile.
             </p>
-            <p>© {new Date().getFullYear()} Kryptova. All rights reserved. Built for educational market simulation.</p>
+            <p>
+              © {new Date().getFullYear()} Kryptova. All rights reserved. Founded by Jedidiah. Built for educational market simulation.
+            </p>
           </div>
         </div>
       </footer>
