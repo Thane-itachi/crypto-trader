@@ -111,12 +111,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const db = getDb();
 
-    // --- authenticate: Firebase ID token, verified server-side ---
-    const authHeader = req.headers.authorization ?? '';
-    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+    // --- authenticate: Firebase ID token, strictly verified server-side ---
+    // * signature + project audience + expiry checked by verifyIdToken
+    // * checkRevoked=true additionally rejects tokens from sessions that
+    //   were revoked (password change, "sign out everywhere") or accounts
+    //   that have since been disabled — a stolen-but-unexpired token dies
+    //   with the session it came from
+    // * malformed/malicious Authorization headers never reach the decoder
+    const authHeader = typeof req.headers.authorization === 'string' ? req.headers.authorization : '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+    if (!token || token.split('.').length !== 3) {
+      res.status(401).json({ ok: false, message: 'Not authenticated' });
+      return;
+    }
     let uid: string;
     try {
-      const decoded = await getAuth().verifyIdToken(token);
+      const decoded = await getAuth().verifyIdToken(token, true);
       uid = decoded.uid;
     } catch {
       res.status(401).json({ ok: false, message: 'Not authenticated' });

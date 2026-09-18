@@ -97,7 +97,14 @@ export default function PriceChart({ symbol, kind, height = 320, showRanges = tr
     setCandles(next);
   };
 
-  const connected = useCandleStream(streamOn ? symbol : null, streamOn ? streamInterval ?? null : null, handleTick);
+  const { connected, source } = useCandleStream(
+    streamOn ? symbol : null,
+    streamOn ? streamInterval ?? null : null,
+    handleTick,
+    // last-resort tier: real price from the /api/quotes market refresh if
+    // Binance WS *and* REST are both unreachable or rate-limited
+    { getPrice: () => getQuote(symbol)?.price ?? null },
+  );
 
   // Countdown ticks once per second toward the active candle's close time.
   useEffect(() => {
@@ -131,12 +138,36 @@ export default function PriceChart({ symbol, kind, height = 320, showRanges = tr
           {streamOn && (
             <span
               className={`flex items-center gap-1.5 rounded-full px-2 py-0.5 font-mono text-[10px] font-semibold ${
-                connected ? 'bg-emerald-500/10 text-emerald-500' : 'bg-panel text-muted'
+                connected
+                  ? 'bg-emerald-500/10 text-emerald-500'
+                  : source === 'rest' || source === 'price'
+                    ? 'bg-amber-500/10 text-amber-500'
+                    : 'bg-panel text-muted'
               }`}
-              title={connected ? 'Binance live stream — time until the current candle closes' : 'Live stream unavailable — using market refresh'}
+              title={
+                connected
+                  ? 'Binance live stream — time until the current candle closes'
+                  : source === 'rest'
+                    ? 'Binance stream unavailable — polling REST klines every ~10s'
+                    : source === 'price'
+                      ? 'Binance unavailable — updating from market refresh'
+                      : 'Live stream unavailable — using market refresh'
+              }
             >
-              <span className={`h-1.5 w-1.5 rounded-full ${connected ? 'animate-pulse bg-emerald-500' : 'bg-muted-foreground/40'}`} />
-              {connected ? (countdown !== null ? `${fmtCountdown(countdown)} to close` : 'connecting…') : 'stream off'}
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${
+                  connected ? 'animate-pulse bg-emerald-500' : source === 'rest' || source === 'price' ? 'bg-amber-500' : 'bg-muted-foreground/40'
+                }`}
+              />
+              {connected
+                ? countdown !== null
+                  ? `${fmtCountdown(countdown)} to close`
+                  : 'connecting…'
+                : source === 'rest'
+                  ? 'rest polling'
+                  : source === 'price'
+                    ? 'market refresh'
+                    : 'stream off'}
             </span>
           )}
         </div>
@@ -256,7 +287,11 @@ export default function PriceChart({ symbol, kind, height = 320, showRanges = tr
   ? 'Simulated chart data — not real market history.'
   : streamOn && connected
     ? 'Live Binance stream · active candle updates tick-by-tick'
-    : 'Live market history · updates every refresh'}
+    : streamOn && source === 'rest'
+      ? 'Binance REST polling fallback · active candle updates every ~10s'
+      : streamOn && source === 'price'
+        ? 'Market refresh fallback · active candle tracks the live quote price'
+        : 'Live market history · updates every refresh'}
       </p>
     </div>
   );

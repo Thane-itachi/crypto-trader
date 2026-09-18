@@ -41,6 +41,7 @@ export interface KlineCandle {
   l: number;
   c: number;
   v: number; // base-asset volume
+  closeTime: number; // candle close time (ms)
 }
 
 /**
@@ -68,6 +69,7 @@ export async function fetchKlines(
         l: +r[3],
         c: +r[4],
         v: +r[5],
+        closeTime: (r as unknown[])[6] as number,
       }));
     } catch {
       // try next host
@@ -77,8 +79,12 @@ export async function fetchKlines(
 }
 
 /**
- * Opens a kline stream. Retries with exponential backoff (alternating hosts)
- * and gives up silently after 8 attempts — callers then stay on REST polling.
+ * Opens a kline stream. Retries indefinitely with exponential backoff
+ * (alternating hosts), capped at 30s between attempts — a tab may stay open
+ * for hours, reconnect attempts are cheap, and the stream should self-heal
+ * whenever the network or Binance recovers. Callers run a REST polling
+ * fallback while disconnected (see useCandleStream), so a dropped or
+ * rate-limited stream never freezes the active candle.
  * Returns a stop function.
  */
 export function openKlineStream(
@@ -95,7 +101,7 @@ export function openKlineStream(
   const scheduleRetry = () => {
     if (stopped) return;
     attempt += 1;
-    if (attempt > 8) return; // stay on REST fallback
+    // exponential backoff capped at 30s — keep trying for the tab's lifetime
     const delay = Math.min(1000 * 2 ** (attempt - 1), 30_000);
     retryTimer = setTimeout(attemptConnect, delay);
   };

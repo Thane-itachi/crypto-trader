@@ -32,10 +32,21 @@ function getDb() {
   return getFirestore();
 }
 
+/**
+ * Strict Firebase ID-token verification for trade-execution routes:
+ * * signature + project audience + expiry checked by verifyIdToken
+ * * checkRevoked=true also rejects revoked sessions (password change,
+ *   "sign out everywhere") and disabled accounts — a leaked token dies
+ *   with the session it was issued to
+ * * malformed Authorization headers are rejected before decoding
+ */
 async function authenticate(req: VercelRequest): Promise<string | null> {
-  const token = (req.headers.authorization ?? '').startsWith('Bearer ') ? req.headers.authorization!.slice(7) : '';
+  const header = typeof req.headers.authorization === 'string' ? req.headers.authorization : '';
+  if (!header.startsWith('Bearer ')) return null;
+  const token = header.slice(7).trim();
+  if (!token || token.split('.').length !== 3) return null;
   try {
-    return (await getAuth().verifyIdToken(token)).uid;
+    return (await getAuth().verifyIdToken(token, true)).uid;
   } catch {
     return null;
   }
