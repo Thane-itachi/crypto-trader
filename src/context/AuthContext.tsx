@@ -3,8 +3,11 @@ import type { ReactNode } from 'react';
 import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
   signInWithEmailAndPassword,
   sendPasswordResetEmail,
+  updatePassword as fbUpdatePassword,
   signOut as fbSignOut,
   updateProfile as fbUpdateProfile,
 } from 'firebase/auth';
@@ -21,6 +24,7 @@ interface AuthCtx {
   signUp: (email: string, password: string, displayName: string) => Promise<{ error: string | null }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   forgotPassword: (email: string) => Promise<{ error: string | null }>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   updateProfile: (fields: Partial<Profile>) => Promise<{ error: string | null }>;
 }
@@ -182,6 +186,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const changePassword = useCallback(
+    async (currentPassword: string, newPassword: string) => {
+      if (!user || !user.email) return { error: 'Not signed in' };
+      try {
+        // changing a password requires recent authentication
+        await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, currentPassword));
+        await fbUpdatePassword(user, newPassword);
+        return { error: null };
+      } catch (e) {
+        const code = (e as { code?: string }).code ?? '';
+        if (code === 'auth/wrong-password' || code === 'auth/invalid-credential' || code === 'auth/user-not-found') {
+          return { error: 'Your current password is incorrect' };
+        }
+        if (code === 'auth/weak-password') return { error: 'New password must be at least 6 characters' };
+        if (code === 'auth/too-many-requests') return { error: 'Too many attempts — please wait a moment and try again' };
+        return { error: 'Could not change your password. Please try again.' };
+      }
+    },
+    [user],
+  );
+
   const signOut = useCallback(async () => {
     await fbSignOut(auth);
   }, []);
@@ -201,7 +226,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <Ctx.Provider value={{ user, profile, loading, configured: isFirebaseConfigured, signUp, signIn, forgotPassword, signOut, updateProfile }}>
+    <Ctx.Provider value={{ user, profile, loading, configured: isFirebaseConfigured, signUp, signIn, forgotPassword, changePassword, signOut, updateProfile }}>
       {children}
     </Ctx.Provider>
   );

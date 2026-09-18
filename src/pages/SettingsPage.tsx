@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, Moon, Sun, LogOut, ShieldAlert, DollarSign } from 'lucide-react';
 import { useAuth, useTheme } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationsContext';
 import { Button, Card, PageHeader, Badge } from '../components/ui';
-import { UserCircle } from 'lucide-react';
+import { UserCircle, KeyRound, Eye, EyeOff } from 'lucide-react';
 import AvatarPicker from '../components/AvatarPicker';
 
 function ToggleSwitch({
@@ -40,13 +40,51 @@ function ToggleSwitch({
 }
 
 export default function SettingsPage() {
-  const { user, profile, updateProfile, signOut } = useAuth();
+  const { user, profile, updateProfile, signOut, changePassword } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { notify } = useNotifications();
   const navigate = useNavigate();
 
   const [updatingNotif, setUpdatingNotif] = useState<'notif_trades' | 'notif_market' | null>(null);
   const [signOutLoading, setSignOutLoading] = useState(false);
+
+  const [currentPw, setCurrentPw] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [confirmPw, setConfirmPw] = useState('');
+  const [showPw, setShowPw] = useState(false);
+  const [pwError, setPwError] = useState<string | null>(null);
+  const [changingPw, setChangingPw] = useState(false);
+
+  const handleChangePassword = async (e: FormEvent) => {
+    e.preventDefault();
+    if (changingPw) return;
+    if (!currentPw || !newPw || !confirmPw) {
+      setPwError('Please fill in all three fields.');
+      return;
+    }
+    if (newPw.length < 6) {
+      setPwError('New password must be at least 6 characters.');
+      return;
+    }
+    if (newPw !== confirmPw) {
+      setPwError('New passwords do not match.');
+      return;
+    }
+    if (newPw === currentPw) {
+      setPwError('New password must be different from your current one.');
+      return;
+    }
+    setChangingPw(true);
+    setPwError(null);
+    const { error } = await changePassword(currentPw, newPw);
+    setChangingPw(false);
+    if (error) {
+      setPwError(error);
+    } else {
+      setCurrentPw(''); setNewPw(''); setConfirmPw('');
+      notify('success', 'Password updated', 'Your password has been changed.');
+    }
+  };
 
   const handleToggleNotif = async (key: 'notif_trades' | 'notif_market') => {
     if (!profile) return;
@@ -212,6 +250,78 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
+        </Card>
+
+        {/* Change Password Card */}
+        <Card className="p-6">
+          <div className="flex items-center gap-3 border-b border-line pb-4">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-500/10 text-primary-400">
+              <KeyRound size={20} />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold tracking-tight">Change Password</h2>
+              <p className="text-sm text-muted">Update your sign-in password</p>
+            </div>
+          </div>
+
+          <form onSubmit={handleChangePassword} className="mt-4 space-y-4">
+            {pwError && (
+              <p className="rounded-lg border border-down/30 bg-down/10 p-2.5 text-sm text-down">{pwError}</p>
+            )}
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div>
+                <label htmlFor="currentPw" className="label">Current password</label>
+                <input
+                  id="currentPw"
+                  type={showPw ? 'text' : 'password'}
+                  value={currentPw}
+                  onChange={(e) => setCurrentPw(e.target.value)}
+                  autoComplete="current-password"
+                  className="input"
+                  placeholder="••••••••"
+                />
+              </div>
+              <div>
+                <label htmlFor="newPw" className="label">New password</label>
+                <input
+                  id="newPw"
+                  type={showPw ? 'text' : 'password'}
+                  value={newPw}
+                  onChange={(e) => setNewPw(e.target.value)}
+                  autoComplete="new-password"
+                  className="input"
+                  placeholder="At least 6 characters"
+                />
+              </div>
+              <div>
+                <label htmlFor="confirmPw" className="label">Confirm new password</label>
+                <div className="relative">
+                  <input
+                    id="confirmPw"
+                    type={showPw ? 'text' : 'password'}
+                    value={confirmPw}
+                    onChange={(e) => setConfirmPw(e.target.value)}
+                    autoComplete="new-password"
+                    className="input pr-10"
+                    placeholder="Repeat new password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPw(!showPw)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-txt"
+                    aria-label={showPw ? 'Hide passwords' : 'Show passwords'}
+                  >
+                    {showPw ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <Button type="submit" variant="primary" loading={changingPw}>
+                <KeyRound size={16} /> Update password
+              </Button>
+            </div>
+          </form>
         </Card>
 
         {/* Danger Zone Card */}
