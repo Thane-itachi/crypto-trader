@@ -121,11 +121,26 @@ body {
   }
 }
 
+@keyframes ticker-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.ticker-track {
+  display: flex;
+  width: max-content;
+  animation: ticker-scroll 45s linear infinite;
+}
+.ticker-track:hover {
+  animation-play-state: paused;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .brand-name,
   .animate-card-in,
   .animate-fade-in,
-  .animate-float {
+  .animate-float,
+  .ticker-track {
     animation: none;
   }
   .orbit-coin,

@@ -19,29 +19,35 @@ export function TickerTape() {
           </Badge>
         </div>
 
-        <div className="flex flex-1 items-center gap-2.5 overflow-x-auto py-0.5 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+        <div className="relative flex-1 overflow-hidden py-0.5 [mask-image:linear-gradient(to_right,transparent,black_24px,black_calc(100%-24px),transparent)]">
           {loading || list.length === 0 ? (
-            Array.from({ length: 8 }).map((_, i) => (
-              <div
-                key={i}
-                className="flex shrink-0 items-center gap-2 rounded-lg border border-line bg-panel px-3 py-1 text-xs"
-              >
-                <Skeleton className="h-4 w-10" />
-                <Skeleton className="h-4 w-16" />
-              </div>
-            ))
+            <div className="flex items-center gap-2.5">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="flex shrink-0 items-center gap-2 rounded-lg border border-line bg-panel px-3 py-1 text-xs"
+                >
+                  <Skeleton className="h-4 w-10" />
+                  <Skeleton className="h-4 w-16" />
+                </div>
+              ))}
+            </div>
           ) : (
-            list.map((q) => (
-              <Link
-                key={q.symbol}
-                to={`/signup`}
-                className="flex shrink-0 items-center gap-2 rounded-lg border border-line bg-panel px-3 py-1 text-xs transition-colors hover:border-primary-500/40 hover:bg-panel/80"
-              >
-                <span className="font-bold text-txt">{q.symbol}</span>
-                <span className="font-mono text-txt">{fmtPrice(q.price)}</span>
-                <PriceChange value={q.change24h} withIcon={false} />
-              </Link>
-            ))
+            <div className="ticker-track gap-2.5 py-0.5">
+              {[...list, ...list].map((q, i) => (
+                <Link
+                  key={`${q.symbol}-${i}`}
+                  to={`/signup`}
+                  aria-hidden={i >= list.length}
+                  tabIndex={i >= list.length ? -1 : 0}
+                  className="flex shrink-0 items-center gap-2 rounded-lg border border-line bg-panel px-3 py-1 text-xs transition-colors hover:border-primary-500/40 hover:bg-panel/80"
+                >
+                  <span className="font-bold text-txt">{q.symbol}</span>
+                  <span className="font-mono text-txt">{fmtPrice(q.price)}</span>
+                  <PriceChange value={q.change24h} withIcon={false} />
+                </Link>
+              ))}
+            </div>
           )}
         </div>
       </div>
